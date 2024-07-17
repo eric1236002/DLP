@@ -3,3 +3,4 @@
 *.pth
 __pycache__/
 dataset/
+*.pyc

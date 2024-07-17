@@ -3,7 +3,7 @@ import torch
 import Dataloader
 import model.SCCNet as SCCNet
 import logging
-
+import os
 # init logger
 logging.basicConfig(level=logging.DEBUG)
 
@@ -16,8 +16,8 @@ def test(data):
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=256)
 
     # load model
-    model = SCCNet.SCCNet(numClasses=4, timeSample=438, Nu=22, C=22, Nc=20, Nt=1, dropoutRate=0.5,Nf=1)
-    model.load_state_dict(torch.load('D:\Cloud\DLP\lab2\weight\LOSO_6_3_55.pth'))
+    model = SCCNet.SCCNet(numClasses=4, timeSample=438, Nu=22, C=22, Nc=20, Nt=1, dropoutRate=0.5)
+    model.load_state_dict(torch.load('D:\Cloud\DLP\lab2\weight\LOSO18-01-02-49.pth'))
     model.to(device)
     model.eval()
 
