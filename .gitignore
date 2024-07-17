@@ -1,0 +1,5 @@
+*.zip
+*.pdf
+*.pth
+__pycache__/
+dataset/
