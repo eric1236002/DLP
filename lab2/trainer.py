@@ -21,7 +21,7 @@ import argparse
 import tester
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
-
+import copy
 # init logger
 logging.basicConfig(level=logging.DEBUG)
 log_dir = os.path.join(os.getcwd(), 'D:\Cloud\DLP\lab2\logs')
@@ -70,7 +70,7 @@ def train(epoch,data,finetune_model,numClasses, timeSample, Nu, C, Nc, Nt, dropo
         dataset = Dataloader.MIBCI2aDataset(mode='train',data=data)
         model = SCCNet.SCCNet(numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate)
     #(22,438) nchannels =22 ,time = 438
-    train_idx, val_idx = train_test_split(list(range(len(dataset))), test_size=0.2, random_state=42)
+    train_idx, val_idx = train_test_split(list(range(len(dataset))), test_size=0.1, random_state=42)
     train_dataset = Subset(dataset, train_idx)
     val_dataset = Subset(dataset, val_idx)
 
@@ -85,11 +85,12 @@ def train(epoch,data,finetune_model,numClasses, timeSample, Nu, C, Nc, Nt, dropo
         scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, verbose=True)
     criterion = nn.CrossEntropyLoss()
 
-    early_stopping = EarlyStopping(patience=30, verbose=True,delta=0.005)
+    early_stopping = EarlyStopping(patience=50, verbose=True,delta=0.002)
+    best_model_wts = None
+    best_val_loss = float('inf')
 
-
-    model.train()
     for t in range(epoch):
+        model.train()
         correct_train = 0
         total_train = 0
         current_loss = [] 
@@ -147,6 +148,11 @@ def train(epoch,data,finetune_model,numClasses, timeSample, Nu, C, Nc, Nt, dropo
         writer.add_scalar('Accuracy/val', val_accuracy, t)
         print(f'Epoch: {t}, Train Accuracy: {accuracy:.3f}, Train Loss: {loss:.3f}, Val Accuracy: {val_accuracy:.3f}, Val Loss: {val_loss:.3f}')
 
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            logging.info('current %d epoch best val loss: %s',t, best_val_loss)
+            best_model_wts = copy.deepcopy(model.state_dict())
+
 
         early_stopping(val_loss)
         if early_stopping.early_stop:
@@ -154,19 +160,20 @@ def train(epoch,data,finetune_model,numClasses, timeSample, Nu, C, Nc, Nt, dropo
             break
 
     # save model
+    model.load_state_dict(best_model_wts)
     torch.save(model.state_dict(), 'D:\Cloud\DLP\lab2\weight\\'+data+date_time+'.pth')
     logging.info('Model saved as '+data+date_time+'.pth')
     test_accuracy,test_loss=tester.test(data,'D:\Cloud\DLP\lab2\weight\\'+data+date_time+'.pth',numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,weight_decay,scheduler,batch_size,padding1,padding2)
     print('Test Accuracy: %.3f, Test Loss: %.3f' % (test_accuracy,test_loss))
     writer.add_hparams(
-        {'numClasses': numClasses, 'timeSample': timeSample, 'Nu': Nu, 'C': C, 'Nc': Nc, 'Nt': Nt, 'dropoutRate': dropoutRate, 'lr': lr, 'weight_decay': weight_decay,'scheduler':scheduler,'batch_size':batch_size},
+        {'numClasses': numClasses, 'timeSample': timeSample, 'Nu': Nu, 'C': C, 'Nc': Nc, 'Nt': Nt, 'dropoutRate': dropoutRate, 'lr': lr, 'weight_decay': weight_decay,'batch_size':batch_size},
         {'accuracy': test_accuracy, 'loss': test_loss}
         )
     writer.close()
 if __name__ == '__main__':
     argparse = argparse.ArgumentParser()
     argparse.add_argument("--epoch", type=int, default=800)
-    argparse.add_argument("--data", type=str, default='LOSO')
+    argparse.add_argument("--data", type=str, default='SD')
     argparse.add_argument("--finetune_model", type=str, default=None)
     argparse.add_argument("--numClasses", type=int, default=4)
     argparse.add_argument("--timeSample", type=int, default=438)

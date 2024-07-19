@@ -19,9 +19,8 @@ def test(data,model_dic,numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,we
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size, shuffle=False)
 
     # load model
-    model = SCCNet.SCCNet(numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,padding1,padding2)
-    if model_dic is not None:
-        model.load_state_dict(torch.load(model_dic))
+    model = SCCNet.SCCNet(numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate)
+    model.load_state_dict(torch.load(model_dic))
     model.to(device)
     model.eval()
     loss_temp=[]
@@ -45,8 +44,8 @@ def test(data,model_dic,numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,we
 
 if __name__ == '__main__':
     argparse = argparse.ArgumentParser()
-    argparse.add_argument("--data", type=str, default='FT')
-    argparse.add_argument("--finetune_model", type=str, default=None)
+    argparse.add_argument("--data", type=str, default='LOSO')
+    argparse.add_argument("--model", type=str, default="D:\Cloud\DLP\lab2\weight\LOSO07-19-11-59-48.pth")
     argparse.add_argument("--numClasses", type=int, default=4)
     argparse.add_argument("--timeSample", type=int, default=438)
     argparse.add_argument("--Nu", type=int, default=22)
@@ -61,4 +60,4 @@ if __name__ == '__main__':
     argparse.add_argument("--padding1", default=(0,0))
     argparse.add_argument("--padding2", default=(0,5))
     args = argparse.parse_args()
-    test(args.data,args.finetune_model ,args.numClasses, args.timeSample, args.Nu, args.C, args.Nc, args.Nt, args.dropoutRate,args.lr,args.weight_decay,args.scheduler,args.batch_size,args.padding1,args.padding2)
+    test(args.data,args.model ,args.numClasses, args.timeSample, args.Nu, args.C, args.Nc, args.Nt, args.dropoutRate,args.lr,args.weight_decay,args.scheduler,args.batch_size,args.padding1,args.padding2)
