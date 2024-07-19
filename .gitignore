@@ -1,9 +1,12 @@
 *.zip
 *.pdf
 *.pth
+*39.pyc
 /model/__pycache__/
 /__pycache__/
 dataset/
-*.pyc
-/logs/
+lab2/logs
+lab2/model/__pycache__/SCCNet.cpython-39.pyc
+lab2/__pycache__/tester.cpython-39.pyc
+lab2/__pycache__/utils.cpython-39.pyc
 lab2/model/__pycache__/SCCNet.cpython-39.pyc

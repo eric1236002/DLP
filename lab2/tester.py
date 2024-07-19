@@ -1,26 +1,30 @@
 # implement your testing script here
 import torch
+import torch.nn as nn
 import Dataloader
 import model.SCCNet as SCCNet
 import logging
 import os
+import numpy as np
+import argparse
 # init logger
 logging.basicConfig(level=logging.DEBUG)
 
-def test(data):
+def test(data,model_dic,numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,weight_decay,scheduler,batch_size,padding1,padding2):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info('Using device: %s', device)
 
     # load dataset
     test_dataset = Dataloader.MIBCI2aDataset(mode='test',data=data)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=512, shuffle=False)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size, shuffle=False)
 
     # load model
-    model = SCCNet.SCCNet(numClasses=4, timeSample=438, Nu=22, C=22, Nc=20, Nt=1, dropoutRate=0.5)
-    model.load_state_dict(torch.load('D:\Cloud\DLP\lab2\weight\FT07-18-11-37-16.pth'))
+    model = SCCNet.SCCNet(numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,padding1,padding2)
+    if model_dic is not None:
+        model.load_state_dict(torch.load(model_dic))
     model.to(device)
     model.eval()
-
+    loss_temp=[]
     # start testing
     correct = 0
     total = 0
@@ -32,12 +36,29 @@ def test(data):
             _, predicted = torch.max(outputs, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
-
-            # logging.info('Batch: %d, Accuracy: %.3f', i, 100 * correct / total)
-
-    print('Accuracy: ', 100 * correct / total)
+            loss = nn.CrossEntropyLoss()(outputs, labels)
+            loss_temp.append(loss.item())
+    logging.info('Test Accuracy: %.3f', 100 * correct / total)
+    logging.info('Test Loss: %.3f', np.mean(loss_temp))
+    return 100 * correct / total, np.mean(loss_temp)
 
 
 if __name__ == '__main__':
-    data=['LOSO', 'SD', 'FT']
-    test(data[0])
+    argparse = argparse.ArgumentParser()
+    argparse.add_argument("--data", type=str, default='FT')
+    argparse.add_argument("--finetune_model", type=str, default=None)
+    argparse.add_argument("--numClasses", type=int, default=4)
+    argparse.add_argument("--timeSample", type=int, default=438)
+    argparse.add_argument("--Nu", type=int, default=22)
+    argparse.add_argument("--C", type=int, default=22)
+    argparse.add_argument("--Nc", type=int, default=20)
+    argparse.add_argument("--Nt", type=int, default=1)
+    argparse.add_argument("--dropoutRate", type=float, default=0.5)
+    argparse.add_argument("--lr", type=float, default=0.001)
+    argparse.add_argument("--weight_decay", type=float, default=0.001)
+    argparse.add_argument("--scheduler", type=str, default=None)
+    argparse.add_argument("--batch_size", type=int, default=512)
+    argparse.add_argument("--padding1", default=(0,0))
+    argparse.add_argument("--padding2", default=(0,5))
+    args = argparse.parse_args()
+    test(args.data,args.finetune_model ,args.numClasses, args.timeSample, args.Nu, args.C, args.Nc, args.Nt, args.dropoutRate,args.lr,args.weight_decay,args.scheduler,args.batch_size,args.padding1,args.padding2)
