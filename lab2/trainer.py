@@ -22,12 +22,21 @@ import tester
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
 import copy
+
 # init logger
 logging.basicConfig(level=logging.DEBUG)
 log_dir = os.path.join(os.getcwd(), 'D:\Cloud\DLP\lab2\logs')
 date_time = time.strftime('%m-%d-%H-%M-%S', time.localtime(time.time()))
 os.makedirs(log_dir, exist_ok=True)
 
+def get_scheduler(scheduler,optimizer):
+    if scheduler == 'ReduceLROnPlateau':
+        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, verbose=True)
+    elif scheduler == 'StepLR':
+        scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
+    else:
+        scheduler = None
+    return scheduler
 
 class EarlyStopping:
     def __init__(self, patience=7, verbose=False, delta=0):
@@ -70,7 +79,9 @@ def train(epoch,data,finetune_model,numClasses, timeSample, Nu, C, Nc, Nt, dropo
         dataset = Dataloader.MIBCI2aDataset(mode='train',data=data)
         model = SCCNet.SCCNet(numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate)
     #(22,438) nchannels =22 ,time = 438
-    train_idx, val_idx = train_test_split(list(range(len(dataset))), test_size=0.1, random_state=42)
+
+    #cross validation
+    train_idx, val_idx = train_test_split(list(range(len(dataset))), test_size=0.2, random_state=42)
     train_dataset = Subset(dataset, train_idx)
     val_dataset = Subset(dataset, val_idx)
 
@@ -81,11 +92,11 @@ def train(epoch,data,finetune_model,numClasses, timeSample, Nu, C, Nc, Nt, dropo
     # print(model)
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    if scheduler == 'ReduceLROnPlateau':
-        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, verbose=True)
+    scheduler = get_scheduler(scheduler,optimizer)
+    #Euclidean_Distance
     criterion = nn.CrossEntropyLoss()
 
-    early_stopping = EarlyStopping(patience=50, verbose=True,delta=0.002)
+    early_stopping = EarlyStopping(patience=30, verbose=True,delta=0.002)
     best_model_wts = None
     best_val_loss = float('inf')
 
@@ -112,7 +123,7 @@ def train(epoch,data,finetune_model,numClasses, timeSample, Nu, C, Nc, Nt, dropo
         loss = np.mean(current_loss)
         accuracy = 100 * correct_train / total_train
 
-        if scheduler == 'ReduceLROnPlateau':
+        if scheduler != None:
             scheduler.step(loss)
 
         training_accuracy.append(accuracy)
@@ -155,24 +166,29 @@ def train(epoch,data,finetune_model,numClasses, timeSample, Nu, C, Nc, Nt, dropo
 
 
         early_stopping(val_loss)
-        if early_stopping.early_stop:
+        if early_stopping.early_stop and data != 'FT':
             print("Early stopping")
             break
 
     # save model
     model.load_state_dict(best_model_wts)
-    torch.save(model.state_dict(), 'D:\Cloud\DLP\lab2\weight\\'+data+date_time+'.pth')
-    logging.info('Model saved as '+data+date_time+'.pth')
-    test_accuracy,test_loss=tester.test(data,'D:\Cloud\DLP\lab2\weight\\'+data+date_time+'.pth',numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,weight_decay,scheduler,batch_size,padding1,padding2)
+    model_save_dic='D:\Cloud\DLP\lab2\weight\\'+data+date_time+'.pth'
+    torch.save(model.state_dict(), model_save_dic)
+
+    logging.info('Model saved as'+ model_save_dic)
+    test_accuracy,test_loss,pred,label=tester.test(data,model_save_dic,numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,weight_decay,scheduler,batch_size,padding1,padding2)
     print('Test Accuracy: %.3f, Test Loss: %.3f' % (test_accuracy,test_loss))
     writer.add_hparams(
         {'numClasses': numClasses, 'timeSample': timeSample, 'Nu': Nu, 'C': C, 'Nc': Nc, 'Nt': Nt, 'dropoutRate': dropoutRate, 'lr': lr, 'weight_decay': weight_decay,'batch_size':batch_size},
         {'accuracy': test_accuracy, 'loss': test_loss}
         )
     writer.close()
+
+    # if data=='LOSO':
+    #     train(250,'FT',model_save_dic ,numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,weight_decay,scheduler,batch_size,padding1,padding2)
 if __name__ == '__main__':
     argparse = argparse.ArgumentParser()
-    argparse.add_argument("--epoch", type=int, default=800)
+    argparse.add_argument("--epoch", type=int, default=500)
     argparse.add_argument("--data", type=str, default='SD')
     argparse.add_argument("--finetune_model", type=str, default=None)
     argparse.add_argument("--numClasses", type=int, default=4)

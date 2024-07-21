@@ -16,7 +16,7 @@ def test(data,model_dic,numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,we
 
     # load dataset
     test_dataset = Dataloader.MIBCI2aDataset(mode='test',data=data)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size, shuffle=False)
+    test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=False)
 
     # load model
     model = SCCNet.SCCNet(numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate)
@@ -24,28 +24,32 @@ def test(data,model_dic,numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,we
     model.to(device)
     model.eval()
     loss_temp=[]
+    pred_temp=[]
+    labels_temp=[]
     # start testing
     correct = 0
     total = 0
     with torch.no_grad():
-        for i, (features, labels) in enumerate(test_loader):
+        for features, labels in test_loader:
             features = features.unsqueeze(1).float()
             features, labels = features.to(device), labels.to(device).to(device).long()
             outputs = model(features)
             _, predicted = torch.max(outputs, 1)
+            pred_temp.append(predicted.cpu().numpy())
+            labels_temp.append(labels.cpu().numpy())
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
             loss = nn.CrossEntropyLoss()(outputs, labels)
             loss_temp.append(loss.item())
     logging.info('Test Accuracy: %.3f', 100 * correct / total)
     logging.info('Test Loss: %.3f', np.mean(loss_temp))
-    return 100 * correct / total, np.mean(loss_temp)
+    return 100 * correct / total, np.mean(loss_temp),pred_temp,labels_temp
 
 
 if __name__ == '__main__':
     argparse = argparse.ArgumentParser()
     argparse.add_argument("--data", type=str, default='LOSO')
-    argparse.add_argument("--model", type=str, default="D:\Cloud\DLP\lab2\weight\LOSO07-19-11-59-48.pth")
+    argparse.add_argument("--model", type=str, default="D:\Cloud\DLP\lab2\weight\\best\LOSO07-19-22-10-31.pth")
     argparse.add_argument("--numClasses", type=int, default=4)
     argparse.add_argument("--timeSample", type=int, default=438)
     argparse.add_argument("--Nu", type=int, default=22)

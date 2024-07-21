@@ -6,7 +6,9 @@
 /__pycache__/
 dataset/
 lab2/logs
-lab2/model/__pycache__/SCCNet.cpython-39.pyc
+lab2/~$report.docx
+lab2/report.docx
+lab2/__pycache__/Dataloader.cpython-39.pyc
 lab2/__pycache__/tester.cpython-39.pyc
 lab2/__pycache__/utils.cpython-39.pyc
 lab2/model/__pycache__/SCCNet.cpython-39.pyc

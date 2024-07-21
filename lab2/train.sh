@@ -3,13 +3,13 @@
 # 設定要訓練的參數組合
 Nu_values=(22 44)
 Nt_values=(1 4)
-batch_sizes=(256 512)
-learning_rates=(0.001)
+batch_sizes=(64 256 512)
+learning_rates=(0.001 0.0005 0.0001)
 # 設定訓練次數
-num_runs=3
+num_runs=5
 
 # 設定其他參數
-epoch=800
+epoch=500
 data="SD"
 finetune_model=None
 numClasses=4
