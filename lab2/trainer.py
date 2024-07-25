@@ -184,12 +184,12 @@ def train(epoch,data,finetune_model,numClasses, timeSample, Nu, C, Nc, Nt, dropo
         )
     writer.close()
 
-    # if data=='LOSO':
-    #     train(250,'FT',model_save_dic ,numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,weight_decay,scheduler,batch_size,padding1,padding2)
+    if data=='LOSO':
+        train(250,'FT',model_save_dic ,numClasses, timeSample, Nu, C, Nc, Nt, dropoutRate,lr,weight_decay,scheduler,batch_size,padding1,padding2)
 if __name__ == '__main__':
     argparse = argparse.ArgumentParser()
-    argparse.add_argument("--epoch", type=int, default=500)
-    argparse.add_argument("--data", type=str, default='SD')
+    argparse.add_argument("--epoch", type=int, default=10)
+    argparse.add_argument("--data", type=str, default='LOSO')
     argparse.add_argument("--finetune_model", type=str, default=None)
     argparse.add_argument("--numClasses", type=int, default=4)
     argparse.add_argument("--timeSample", type=int, default=438)

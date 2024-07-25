@@ -12,3 +12,6 @@ lab2/__pycache__/Dataloader.cpython-39.pyc
 lab2/__pycache__/tester.cpython-39.pyc
 lab2/__pycache__/utils.cpython-39.pyc
 lab2/model/__pycache__/SCCNet.cpython-39.pyc
+wandb/
+HW2/
+*.pyc
