@@ -50,7 +50,7 @@ def train(args):
         raise ValueError('Model not supported')
     model.to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = Adam(model.parameters(), lr=1e-3)
+    optimizer = Adam(model.parameters(), lr=args.learning_rate)
     early_stopping = utils.EarlyStopping(patience=10, verbose=True)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)

@@ -109,3 +109,7 @@ def module_test():
     dummy_input = torch.randn(batch_size, channels, height, width)
     output = model(dummy_input)
     print("Output shape:", output.shape)
+
+if __name__ == '__main__':
+    module_test()
+

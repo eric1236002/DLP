@@ -11,8 +11,8 @@ def inferece(args):
     print(f'Test Dice Score: {dice:.4f}')
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images')
-    parser.add_argument('--model', default='saved_models/07-25-10-13-26.pth', help='path to the stored model weoght')
-    parser.add_argument('--data_path',default="dataset\oxford-iiit-pet", type=str, help='path to the input data')
+    parser.add_argument('--model', default='Lab_3\saved_models\\0.9-07-25-10-13-26.pth', help='path to the stored model weoght')
+    parser.add_argument('--data_path',default="Lab_3\dataset\oxford-iiit-pet", type=str, help='path to the input data')
     parser.add_argument('--batch_size', '-b', type=int, default=1, help='batch size')
     
     return parser.parse_args()
