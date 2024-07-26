@@ -2,6 +2,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import logging
+
+logging.basicConfig(level=None)
 class UNet(torch.nn.Module):
     def __init__(self, channels, classes):
         super(UNet, self).__init__()
@@ -21,16 +24,27 @@ class UNet(torch.nn.Module):
         
 
     def forward(self, x):
+        logging.info(f'Input shape: {x.shape}') # [1, 3, 256, 256]
         x1 = self.conv1(x)
+        logging.info(f'x1 shape: {x1.shape}') # [1, 64, 256, 256]
         x1_1 = self.down_1(x1)
+        logging.info(f'x1_1 shape: {x1_1.shape}') # [1, 128, 128, 128]
         x1_2 = self.down_2(x1_1)
+        logging.info(f'x1_2 shape: {x1_2.shape}') # [1, 256, 64, 64]
         x1_3 = self.down_3(x1_2)
+        logging.info(f'x1_3 shape: {x1_3.shape}') # [1, 512, 32, 32]
         x1_4 = self.down_4(x1_3)
+        logging.info(f'x1_4 shape: {x1_4.shape}') # [1, 1024, 16, 16]
         x2_4 = self.up_1(x1_4, x1_3)
+        logging.info(f'x2_4 shape: {x2_4.shape}') # [1, 512, 32, 32]
         x2_3 = self.up_2(x2_4, x1_2)
+        logging.info(f'x2_3 shape: {x2_3.shape}') # [1, 256, 64, 64]
         x2_2 = self.up_3(x2_3, x1_1)
+        logging.info(f'x2_2 shape: {x2_2.shape}') # [1, 128, 128, 128]
         x2_1 = self.up_4(x2_2, x1)
+        logging.info(f'x2_1 shape: {x2_1.shape}') # [1, 64, 256, 256]
         x = self.final_conv(x2_1)
+        logging.info(f'Output shape: {x.shape}') # [1, 3, 256, 256]
         x = self.softmax(x)
         return x
 
@@ -85,3 +99,13 @@ class Up(nn.Module):
         concat=torch.cat([x1,x2],dim=1)
         return self.up_conv(concat)
 
+def module_test():
+    channels = 3 
+    num_classes = 3
+    batch_size = 1  
+    height, width = 256, 256 
+
+    model = UNet(channels, num_classes)
+    dummy_input = torch.randn(batch_size, channels, height, width)
+    output = model(dummy_input)
+    print("Output shape:", output.shape)

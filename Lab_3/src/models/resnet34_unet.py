@@ -2,6 +2,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import logging
+
+logging.basicConfig(level=None)
 class ResidualBlock(nn.Module): 
     def __init__(self, in_channels, out_channels, stride=1):
         #https://john850512.files.wordpress.com/2019/02/residual.png
@@ -77,18 +80,31 @@ class ResNet34_UNet(nn.Module):
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
+        logging.info(f'Input shape: {x.shape}') # [1, 3, 256, 256]
         x1 = self.conv1(x)
+        logging.info(f'x1 shape: {x1.shape}') # [1, 64, 64, 64]
         x2 = self.conv2(x1)
+        logging.info(f'x2 shape: {x2.shape}') # [1, 64, 64, 64]
         x3 = self.conv3(x2)
+        logging.info(f'x3 shape: {x3.shape}') # [1, 128, 32, 32]
         x4 = self.conv4(x3)
+        logging.info(f'x4 shape: {x4.shape}') # [1, 256, 16, 16]
         x5 = self.conv5(x4)
+        logging.info(f'x5 shape: {x5.shape}') # [1, 512, 8, 8]
         x = self.bottleneck(x5)
+        logging.info(f'bottleneck shape: {x.shape}') # [1, 256, 8, 8]
         x = self.up_1(x, x5)
+        logging.info(f'up1 shape: {x.shape}') # [1, 32, 16, 16]
         x = self.up_2(x, x4)
+        logging.info(f'up2 shape: {x.shape}') # [1, 32, 32, 32]
         x = self.up_3(x, x3)
+        logging.info(f'up3 shape: {x.shape}') # [1, 32, 64, 64]
         x = self.up_4(x, x2)
+        logging.info(f'up4 shape: {x.shape}') # [1, 32, 128, 128]
         x = self.last_up(x)
+        logging.info(f'last_up shape: {x.shape}') # [1, 32, 256, 256]
         x = self.final_conv(x)
+        logging.info(f'Output shape: {x.shape}') # [1, 3, 256, 256]
         x = self.softmax(x)
         return x
 
