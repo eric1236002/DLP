@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 from urllib.request import urlretrieve
-
+import random
 class OxfordPetDataset(torch.utils.data.Dataset):
     def __init__(self, root, mode="train", transform=None):
 
@@ -132,5 +132,26 @@ def load_dataset(data_path, mode):
     #檢查是否已經下載資料集
     if not os.path.exists(data_path):
         OxfordPetDataset.download(data_path)
-    dataset = SimpleOxfordPetDataset(data_path, mode)
+    if mode == "train":
+        transform=custom_transform
+    else:
+        transform=None
+    dataset = SimpleOxfordPetDataset(data_path, mode,transform)
     return dataset
+
+def custom_transform(**sample):
+    img = Image.fromarray(sample["image"]).resize((256, 256), Image.BILINEAR)
+    mask = Image.fromarray(sample["mask"]).resize((256, 256), Image.NEAREST)
+    trimap = Image.fromarray(sample["trimap"]).resize((256, 256), Image.NEAREST)
+    num=random.random()
+    if num< 0.5:
+        transpose=Image.FLIP_LEFT_RIGHT
+    elif num> 0.5:
+        transpose=Image.FLIP_TOP_BOTTOM
+        transpose=Image.ROTATE_180
+    img = img.transpose(transpose)
+    mask = mask.transpose(transpose)
+    trimap = trimap.transpose(transpose)
+
+    sample = dict(image= np.array(img), mask= np.array(mask), trimap= np.array(trimap))
+    return sample
