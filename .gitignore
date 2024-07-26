@@ -17,4 +17,4 @@ Lab_2/__pycache__/utils.cpython-39.pyc
 Lab_2/model/__pycache__/SCCNet.cpython-39.pyc
 wandb/
 HW2/
-
+*.sh

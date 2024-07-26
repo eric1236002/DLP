@@ -17,26 +17,6 @@ import wandb
 
 import wandb.testing
 
-class EarlyStopping:
-    def __init__(self, patience=7, verbose=False, delta=0):
-        self.patience = patience
-        self.verbose = verbose
-        self.counter = 0
-        self.best_loss = None
-        self.early_stop = False
-        self.delta = delta
-
-    def __call__(self, val_loss):
-        if self.best_loss is None:
-            self.best_loss = val_loss
-        elif val_loss > self.best_loss + self.delta:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_loss = val_loss
-            self.counter = 0
-
 def train(args):
 
     date_time = time.strftime('%m-%d-%H-%M-%S', time.localtime(time.time()))
@@ -44,14 +24,14 @@ def train(args):
     wandb.init(
     # mode='disabled',   
     project="lab3",
-    name=date_time,
+    name= args.model+date_time,
     # track hyperparameters and run metadata
     config={
     "learning_rate": args.learning_rate,
-    "architecture": "UNet",
+    "model": args.model,
     "dataset": "Oxford-IIIT Pet Dataset",
     "epochs": args.epochs,
-    "batch_size": args.batch_size
+    "batch_size": args.batch_size,
     }
 )
     print('Using device:', device)
@@ -71,7 +51,7 @@ def train(args):
     model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = Adam(model.parameters(), lr=1e-3)
-    early_stopping = EarlyStopping(patience=10, verbose=True)
+    early_stopping = utils.EarlyStopping(patience=10, verbose=True)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
     print(f'Training on {len(train_loader)} samples, validating on {len(val_loader)} samples')
