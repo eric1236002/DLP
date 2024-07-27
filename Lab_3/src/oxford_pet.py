@@ -148,7 +148,6 @@ def custom_transform(**sample):
         transpose=Image.FLIP_LEFT_RIGHT
     elif num> 0.5:
         transpose=Image.FLIP_TOP_BOTTOM
-        transpose=Image.ROTATE_180
     img = img.transpose(transpose)
     mask = mask.transpose(transpose)
     trimap = trimap.transpose(transpose)

@@ -34,6 +34,40 @@ class ResidualBlock(nn.Module):
         return out
     
 
+class ResNet34(nn.Module):
+    def __init__(self, channels, classes):
+        super(ResNet34, self).__init__()
+        self.channels = channels
+        self.classes = classes
+        self.pre_layer = nn.Sequential(
+            nn.Conv2d(channels, 64, kernel_size=7, stride=2, padding=3, bias=False),#kernel是7，然後下一層shape會變成一半，所以padding是3
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1) 
+        )
+        self.layer1 = self.resnet_layer(64, 64, 3) #第一層沒有使用shortcut，所以不用設stride
+        self.layer2 = self.resnet_layer(64, 128, 4, 2)
+        self.layer3 = self.resnet_layer(128, 256, 6, 2)
+        self.layer4 = self.resnet_layer(256, 512, 3, 2)
+
+        self.fc = nn.Linear(512, classes)
+    
+    def resnet_layer(self, in_channels, out_channels, block_num,stride=1):
+        layers = []
+        layers.append(ResidualBlock(in_channels, out_channels, stride))
+        for i in range(1,block_num):#從1開始，因為第一個block已經加進去了，stride也不用設，因為通常第一個block會有stride
+            layers.append(ResidualBlock(out_channels, out_channels))
+        return nn.Sequential(*layers)
+    def forward(self, x):
+        x = self.pre_layer(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = F.avg_pool2d(x, x.shape[3]) 
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
 
 class Double_3x3_Conv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -58,17 +92,16 @@ class ResNet34_UNet(nn.Module):
         super(ResNet34_UNet, self).__init__()
         self.channels = channels
         self.classes = classes
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(channels, 64, kernel_size=7, stride=2, padding=3, bias=False),#kernel是7，然後下一層shape會變成一半，所以padding是3
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1) 
-        )
-        self.conv2 = self.resnet_layer(64, 64, 3) 
-        self.conv3 = self.resnet_layer(64, 128, 4, 2)
-        self.conv4 = self.resnet_layer(128, 256, 6, 2)
-        self.conv5 = self.resnet_layer(256, 512, 3, 2)
-        self.bottleneck = Double_3x3_Conv(512,256)
+        self.resnet = ResNet34(channels,classes)
+        self.resnet_layers = list(self.resnet.children())
+        self.conv1 = self.resnet_layers[0]
+        self.conv2 = self.resnet_layers[1]
+        self.conv3 = self.resnet_layers[2]
+        self.conv4 = self.resnet_layers[3]
+        self.conv5 = self.resnet_layers[4]
+        self.bottleneck = nn.Sequential(nn.Conv2d(512, 256, kernel_size=3, padding=1, bias=False),
+                                        nn.BatchNorm2d(256),
+                                        nn.ReLU(inplace=True))
         self.up_1 = Up(768,768,32)
         self.up_2 = Up(288, 288, 32)
         self.up_3 = Up(160, 160, 32)

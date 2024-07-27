@@ -3,13 +3,15 @@ import argparse
 import oxford_pet
 import utils
 from tqdm import tqdm
+import numpy as np
+
 def evaluate(net, data, device,num_samples=None):
     net.eval()
     dataset = oxford_pet.load_dataset(data,mode='test')
     # dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
     
-    if num_samples is not None:
-        dataset = torch.utils.data.Subset(dataset, range(num_samples))
+    if num_samples is not None: #隨機選取num_samples個樣本
+        dataset = torch.utils.data.Subset(dataset, np.random.choice(len(dataset), num_samples, replace=False))
     
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
 

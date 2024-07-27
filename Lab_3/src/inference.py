@@ -1,14 +1,13 @@
 import argparse
 import evaluate
 import torch
-import models.res
 import models.unet
 import models.resnet34_unet
 import matplotlib.pyplot as plt
 
 def inferece(args):
     if args.model_base=='resnet34_unet':
-        model=models.res.ResNet34_UNet(channels=3,classes=3)
+        model=models.resnet34_unet.ResNet34_UNet(channels=3,classes=3)
     else:
         model=models.unet.UNet(channels=3,classes=3)
     model.load_state_dict(torch.load(args.model))
@@ -48,7 +47,7 @@ def visualize_results(results, num_samples=5):
 
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images')
-    parser.add_argument('--model', default='D:\Cloud\DLP\Lab_3\saved_models\\res0.8.pth', help='path to the stored model weoght')
+    parser.add_argument('--model', default='D:\Cloud\DLP\Lab_3\saved_models\88re.pth', help='path to the stored model weoght')
     parser.add_argument('--model_base', default='resnet34_unet', help='base of the model')
     parser.add_argument('--data_path',default="Lab_3\dataset\oxford-iiit-pet", type=str, help='path to the input data')
     parser.add_argument('--batch_size', '-b', type=int, default=1, help='batch size')

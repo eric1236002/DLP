@@ -49,7 +49,14 @@ def train(args):
     else:
         raise ValueError('Model not supported')
     model.to(device)
-    criterion = nn.CrossEntropyLoss()
+    if args.loss == 'cross_entropy':
+        criterion = nn.CrossEntropyLoss()
+    elif args.loss == 'dice':
+        criterion = utils.DiceLoss()
+    elif args.loss == 'focal':
+        criterion = utils.FocalLoss()
+    else:
+        raise ValueError('Loss function not supported')
     optimizer = Adam(model.parameters(), lr=args.learning_rate)
     early_stopping = utils.EarlyStopping(patience=10, verbose=True)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
@@ -138,6 +145,7 @@ def get_args():
     parser.add_argument('--batch_size', '-b', type=int, default=1, help='batch size')
     parser.add_argument('--learning-rate', '-lr', type=float, default=1e-5, help='learning rate')
     parser.add_argument('--model', '-m', type=str, default='resnet34_unet', help='model name')
+    parser.add_argument('--loss', '-l', type=str, default='dice', help='loss function')
     return parser.parse_args()
  
 if __name__ == "__main__":
