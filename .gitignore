@@ -4,6 +4,7 @@
 *.pyc
 *.npy
 *.pdf
+*.png
 /model/__pycache__/
 /__pycache__/
 *dataset/
@@ -18,3 +19,4 @@ Lab_2/model/__pycache__/SCCNet.cpython-39.pyc
 wandb/
 HW2/
 *.sh
+*.docx
