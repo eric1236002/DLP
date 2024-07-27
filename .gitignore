@@ -20,3 +20,4 @@ wandb/
 HW2/
 *.sh
 *.docx
+*.tmp

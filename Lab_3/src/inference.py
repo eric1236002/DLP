@@ -1,19 +1,24 @@
 import argparse
 import evaluate
 import torch
+import models.res
 import models.unet
 import models.resnet34_unet
 import matplotlib.pyplot as plt
 
 def inferece(args):
-    model=models.unet.UNet(channels=3,classes=3)
+    if args.model_base=='resnet34_unet':
+        model=models.res.ResNet34_UNet(channels=3,classes=3)
+    else:
+        model=models.unet.UNet(channels=3,classes=3)
     model.load_state_dict(torch.load(args.model))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
     model.to(device)
     dice,results=evaluate.evaluate(model,args.data_path,device,args.num_samples)
     print(f'Test Dice Score: {dice:.4f}')
-    visualize_results(results,args.num_samples)
+    if args.num_samples is not None:
+        visualize_results(results,args.num_samples)
 
 def visualize_results(results, num_samples=5):
     fig, axes = plt.subplots(num_samples, 3, figsize=(15, 5*num_samples))
@@ -43,10 +48,11 @@ def visualize_results(results, num_samples=5):
 
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images')
-    parser.add_argument('--model', default='Lab_3\saved_models\\0.9-07-25-10-13-26.pth', help='path to the stored model weoght')
+    parser.add_argument('--model', default='D:\Cloud\DLP\Lab_3\saved_models\\res0.8.pth', help='path to the stored model weoght')
+    parser.add_argument('--model_base', default='resnet34_unet', help='base of the model')
     parser.add_argument('--data_path',default="Lab_3\dataset\oxford-iiit-pet", type=str, help='path to the input data')
     parser.add_argument('--batch_size', '-b', type=int, default=1, help='batch size')
-    parser.add_argument('--num_samples', '-n', type=int, default=5, help='number of samples to visualize')
+    parser.add_argument('--num_samples', '-n', type=int, default=None, help='number of samples to visualize')
     return parser.parse_args()
 
 if __name__ == '__main__':
