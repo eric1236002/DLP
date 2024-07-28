@@ -144,13 +144,10 @@ def custom_transform(**sample):
     mask = Image.fromarray(sample["mask"]).resize((256, 256), Image.NEAREST)
     trimap = Image.fromarray(sample["trimap"]).resize((256, 256), Image.NEAREST)
     num=random.random()
-    if num< 0.5:
-        transpose=Image.FLIP_LEFT_RIGHT
-    elif num> 0.5:
-        transpose=Image.FLIP_TOP_BOTTOM
-    img = img.transpose(transpose)
-    mask = mask.transpose(transpose)
-    trimap = trimap.transpose(transpose)
+    if num>0.5:
+        img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
+        trimap = trimap.transpose(Image.FLIP_LEFT_RIGHT)
 
     sample = dict(image= np.array(img), mask= np.array(mask), trimap= np.array(trimap))
     return sample

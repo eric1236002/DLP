@@ -80,7 +80,7 @@ def train(args):
             loss = criterion(outputs, masks)
             loss.backward()
             optimizer.step()
-            train_loss += loss.item() * images.size(0)+utils.dice_loss(torch.argmax(outputs, dim=1).unsqueeze(1).float(), masks.float())
+            train_loss += loss.item() * images.size(0)
             # 計算Dice Score
             outputs = torch.argmax(outputs, dim=1).unsqueeze(1)
             dice = utils.dice_score(outputs.float(), masks.float())
@@ -141,7 +141,7 @@ def train(args):
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
     parser.add_argument('--data_path', type=str, help='path of the input data',default='dataset/oxford-iiit-pet')
-    parser.add_argument('--epochs', '-e', type=int, default=60, help='number of epochs')
+    parser.add_argument('--epochs', '-e', type=int, default=40, help='number of epochs')
     parser.add_argument('--batch_size', '-b', type=int, default=1, help='batch size')
     parser.add_argument('--learning-rate', '-lr', type=float, default=1e-5, help='learning rate')
     parser.add_argument('--model', '-m', type=str, default='resnet34_unet', help='model name')
