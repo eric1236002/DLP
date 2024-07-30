@@ -47,7 +47,7 @@ def visualize_results(results, num_samples=5):
 
 def get_args():
     parser = argparse.ArgumentParser(description='Predict masks from input images')
-    parser.add_argument('--model', default='D:\Cloud\DLP\Lab_3\saved_models\ResNet34_07-28-22-00-04.pth', help='path to the stored model weoght')
+    parser.add_argument('--model', default='D:\Cloud\DLP\Lab_3\saved_models\DL_Lab3_UNet_313551087_殷暐智.pth', help='path to the stored model weoght')
     parser.add_argument('--data_path',default="Lab_3\dataset\oxford-iiit-pet", type=str, help='path to the input data')
     parser.add_argument('--batch_size', '-b', type=int, default=4, help='batch size')
     parser.add_argument('--num_samples', '-n', type=int, default=None, help='number of samples to visualize')

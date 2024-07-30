@@ -13,27 +13,12 @@ import copy
 from tqdm import tqdm
 import evaluate
 import time
-import wandb
-
-import wandb.testing
 
 def train(args):
 
     date_time = time.strftime('%m-%d-%H-%M-%S', time.localtime(time.time()))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    wandb.init(
-    # mode='disabled',   
-    project="lab3",
-    name= args.model+date_time,
-    # track hyperparameters and run metadata
-    config={
-    "learning_rate": args.learning_rate,
-    "model": args.model,
-    "dataset": "Oxford-IIIT Pet Dataset",
-    "epochs": args.epochs,
-    "batch_size": args.batch_size,
-    }
-)
+
     print('Using device:', device)
 
     train_dataset = oxford_pet.load_dataset(args.data_path,mode='train')
@@ -88,11 +73,7 @@ def train(args):
             
         train_loss /= len(train_dataset)
         train_dice /= len(train_dataset)
-        wandb.log({
-                'epoch': epoch + 1,
-                'train_loss': train_loss,
-                'train_dice': train_dice
-        })
+
         # 驗證過程
         model.eval()
         val_loss = 0.0
@@ -113,11 +94,7 @@ def train(args):
             
         val_loss /= len(val_dataset)
         val_dice /= len(val_dataset)
-        wandb.log({
-                'epoch': epoch + 1,
-                'val_loss': val_loss,
-                'val_dice': val_dice
-        })
+
             
         print(f'Epoch {epoch+1}/{args.epochs}, Training Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}, Training Dice: {train_dice:.4f}, Validation Dice: {val_dice:.4f}')
         if val_loss < best_val_loss:
@@ -132,9 +109,7 @@ def train(args):
             break
 
     test_dice,_=evaluate.evaluate(model, args.data_path, device)
-    wandb.log({
-        'test_dice': test_dice
-    })
+
     print(f'Test Dice Score: {test_dice:.4f}')
     
 
