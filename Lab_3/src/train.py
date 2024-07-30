@@ -23,9 +23,6 @@ def train(args):
 
     train_dataset = oxford_pet.load_dataset(args.data_path,mode='train')
     val_dataset = oxford_pet.load_dataset(args.data_path,mode='valid')
-    # #測試用縮小資料及
-    # train_dataset = torch.utils.data.Subset(train_dataset, np.random.choice(len(train_dataset), 10, replace=False))
-    # val_dataset = torch.utils.data.Subset(val_dataset, np.random.choice(len(val_dataset), 10, replace=False))
 
     if args.model == 'unet':
         model = models.unet.UNet(channels=3,classes=3)
@@ -99,7 +96,7 @@ def train(args):
         print(f'Epoch {epoch+1}/{args.epochs}, Training Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}, Training Dice: {train_dice:.4f}, Validation Dice: {val_dice:.4f}')
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), './saved_models/'+date_time+'.pth')
+            torch.save(model.state_dict(), args.save_model+'\\'+date_time+'.pth')
             print('Model saved')
 
 
@@ -121,6 +118,7 @@ def get_args():
     parser.add_argument('--learning-rate', '-lr', type=float, default=1e-5, help='learning rate')
     parser.add_argument('--model', '-m', type=str, default='resnet34_unet', help='model name')
     parser.add_argument('--loss', '-l', type=str, default='dice', help='loss function')
+    parser.add_argument('--save_model', type=str, default='D:\Cloud\DLP\Lab_3\saved_models', help='path to save model')
     return parser.parse_args()
  
 if __name__ == "__main__":
