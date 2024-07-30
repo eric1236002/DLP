@@ -5,3 +5,8 @@ python train.py --data_path D:\Cloud\DLP\Lab_3\dataset\oxford-iiit-pet --epochs 
 
 UNet
 python train.py --data_path D:\Cloud\DLP\Lab_3\dataset\oxford-iiit-pet --epochs 1 --batch_size 4 --learning-rate 1e-4 --model "unet" --loss "dice" --save_model "D:\Cloud\DLP\Lab_3\saved_models"
+
+inference
+python inference.py --model D:\Cloud\DLP\Lab_3\saved_models\DL_Lab3_UNet_313551087_殷暐智.pth --data_path D:\Cloud\DLP\Lab_3\dataset\oxford-iiit-pet
+
+python inference.py --model D:\Cloud\DLP\Lab_3\saved_models\DL_Lab3_ResNet34_UNet_313551087_殷暐智.pth --data_path D:\Cloud\DLP\Lab_3\dataset\oxford-iiit-pet
