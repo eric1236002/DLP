@@ -29,9 +29,9 @@ def Generate_PSNR(imgs1, imgs2, data_range=1.):
 def Caluate_PSNR(img1, img2):
     psnr=[]
     for i in range(1,630):
-        psnr.append(Generate_PSNR(img1[i], img2[i]))
-    psnr = sum(psnr)/(629) ##check
-    return psnr
+        psnr.append(Generate_PSNR(img1[i], img2[i][0]).item())
+    avg_psnr = sum(psnr)/(629) ##check
+    return psnr,avg_psnr
 
 
 def kl_criterion(mu, logvar, batch_size):
@@ -68,9 +68,9 @@ class kl_annealing():
         #修改beta
         current_stage = n_iter % period
         if current_stage < period * ratio:
-            self.beta = start + current_stage * step
+            return start + current_stage * step
         else:
-            self.beta = stop
+            return stop
         
         
 
@@ -141,8 +141,9 @@ class VAE_Model(nn.Module):
         for (img, label) in (pbar := tqdm(val_loader, ncols=120)):
             img = img.to(self.args.device)
             label = label.to(self.args.device)
-            loss = self.val_one_step(img, label)
+            loss, psnr_list, avg_psnr = self.val_one_step(img, label)
             self.tqdm_bar('val', pbar, loss.detach().cpu(), lr=self.scheduler.get_last_lr()[0])
+            print('\nEpoch: {}, PSNR: {}'.format(self.current_epoch, avg_psnr))
     
     def training_one_step(self, img, label, adapt_TeacherForcing):
         # TODO
@@ -160,15 +161,15 @@ class VAE_Model(nn.Module):
 
 
             # Gaussian predictor
-            z, mu, logvar = self.Gaussian_Predictor(torch.cat((frame_feature, label_feature), dim=1))
+            z, mu, logvar = self.Gaussian_Predictor(frame_feature, label_feature)
 
             # decode fusion
-            decoded = self.Decoder_Fusion(torch.cat((frame_feature, label_feature, z), dim=1))
+            decoded = self.Decoder_Fusion(frame_feature, label_feature, z)
             
             generated = self.Generator(decoded)
             
             #reconstruction loss
-            recon_loss = self.mse_criterion(generated, img)
+            recon_loss = self.mse_criterion(generated, img[:,i])
 
             #kl divergence loss
             kl_loss = kl_criterion(mu, logvar, img.size(0))
@@ -194,21 +195,20 @@ class VAE_Model(nn.Module):
             label_feature = self.label_transformation(label[:,i])
 
             # Gaussian predictor
-            z, mu, logvar = self.Gaussian_Predictor(torch.cat((frame_feature, label_feature), dim=1))
+            z, mu, logvar = self.Gaussian_Predictor(frame_feature, label_feature)
 
             # decode fusion
-            decoded = self.Decoder_Fusion(torch.cat((frame_feature, label_feature, z), dim=1))
+            decoded = self.Decoder_Fusion(frame_feature, label_feature, z)
             
             generated = self.Generator(decoded)
-            
+            pre_img.append(generated)
             #reconstruction loss
-            recon_loss = self.mse_criterion(generated, img)
+            recon_loss = self.mse_criterion(generated, img[:,i])
 
             #kl divergence loss
             kl_loss = kl_criterion(mu, logvar, img.size(0))
 
-            beta = self.kl_annealing.get_beta()
-            loss += recon_loss + beta * kl_loss
+            loss += recon_loss + kl_loss
         psnr_list, avg_psnr = Caluate_PSNR(img[0], pre_img)
         loss /= (self.val_vi_len - 1)
         return loss, psnr_list, avg_psnr

@@ -22,4 +22,6 @@ HW3/
 *.sh
 *.docx
 *.tmp
+*.txt
+*.ckpt
 Lab_3/saved_models/07-28-22-00-04.KmEI6puX.pth.part
