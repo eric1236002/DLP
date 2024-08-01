@@ -77,7 +77,9 @@ class Gaussian_Predictor(nn.Sequential):
         
     def reparameterize(self, mu, logvar):
         # TODO
-        raise NotImplementedError
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
     def forward(self, img, label):
         feature = torch.cat([img, label], dim=1)

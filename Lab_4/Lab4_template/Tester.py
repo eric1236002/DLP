@@ -123,8 +123,15 @@ class Test_model(VAE_Model):
         label_list = []
 
         # TODO
-        raise NotImplementedError
-            
+        pre_img = img[0]
+        for i in range(1,630):
+            frame_feature = self.frame_transformation(pre_img)
+            label_feature = self.label_transformation(label[:, i])
+            noise = self.Gaussian_Predictor(frame_feature, label_feature)
+            fusion = self.Decoder_Fusion(pre_img, noise)
+            pre_img = self.Generator(fusion)
+            decoded_frame_list.append(pre_img.cpu())
+            label_list.append(label[:, i].cpu())
         
         # Please do not modify this part, it is used for visulization
         generated_frame = stack(decoded_frame_list).permute(1, 0, 2, 3, 4)

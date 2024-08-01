@@ -26,6 +26,13 @@ def Generate_PSNR(imgs1, imgs2, data_range=1.):
     psnr = 20 * log10(data_range) - 10 * torch.log10(mse)
     return psnr
 
+def Caluate_PSNR(img1, img2):
+    psnr=[]
+    for i in range(1,630):
+        psnr.append(Generate_PSNR(img1[i], img2[i]))
+    psnr = sum(psnr)/(629) ##check
+    return psnr
+
 
 def kl_criterion(mu, logvar, batch_size):
   KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
@@ -35,20 +42,36 @@ def kl_criterion(mu, logvar, batch_size):
 
 class kl_annealing():
     def __init__(self, args, current_epoch=0):
-        # TODO
-        raise NotImplementedError
-        
+        self.args = args
+        self.current_epoch = current_epoch
+        self.beta = 0   
+        self.kl_anneal_type = args.kl_anneal_type
+        self.kl_anneal_cycle = args.kl_anneal_cycle
+        self.kl_anneal_ratio = args.kl_anneal_ratio
+
     def update(self):
         # TODO
-        raise NotImplementedError
+        self.current_epoch=self.current_epoch+1
+        if self.kl_anneal_type == 'Cyclical':
+            self.beta = self.frange_cycle_linear(n_iter=self.current_epoch, n_cycle=self.kl_anneal_cycle, ratio=self.kl_anneal_ratio)
+        elif self.kl_anneal_type == 'Monotonic':
+            self.beta = self.frange_cycle_linear(n_iter=self.current_epoch, n_cycle=1, ratio=self.kl_anneal_ratio)
     
     def get_beta(self):
         # TODO
-        raise NotImplementedError
+        return self.beta
 
     def frange_cycle_linear(self, n_iter, start=0.0, stop=1.0,  n_cycle=1, ratio=1):
         # TODO
-        raise NotImplementedError
+        period = self.args.num_epoch/n_cycle
+        step = (stop-start)/(period*ratio) 
+        #修改beta
+        current_stage = n_iter % period
+        if current_stage < period * ratio:
+            self.beta = start + current_stage * step
+        else:
+            self.beta = stop
+        
         
 
 class VAE_Model(nn.Module):
@@ -123,11 +146,72 @@ class VAE_Model(nn.Module):
     
     def training_one_step(self, img, label, adapt_TeacherForcing):
         # TODO
-        raise NotImplementedError
-    
+        img = img.to(self.args.device)
+        label = label.to(self.args.device)
+        loss=torch.tensor(0.0, device=self.args.device)
+        for i in range(self.train_vi_len):
+            # Encoder取影片的前i-1張
+            if adapt_TeacherForcing:
+                prev_img = img[:,i-1]
+                frame_feature = self.frame_transformation(prev_img)
+            else:
+                frame_feature = self.frame_transformation(img)
+            label_feature = self.label_transformation(label[:,i])
+
+
+            # Gaussian predictor
+            z, mu, logvar = self.Gaussian_Predictor(torch.cat((frame_feature, label_feature), dim=1))
+
+            # decode fusion
+            decoded = self.Decoder_Fusion(torch.cat((frame_feature, label_feature, z), dim=1))
+            
+            generated = self.Generator(decoded)
+            
+            #reconstruction loss
+            recon_loss = self.mse_criterion(generated, img)
+
+            #kl divergence loss
+            kl_loss = kl_criterion(mu, logvar, img.size(0))
+
+            beta = self.kl_annealing.get_beta()
+            loss += recon_loss + beta * kl_loss
+        loss /= (self.train_vi_len-1)
+        self.optim.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(self.parameters(), 1.)
+        self.optim.step()
+        return loss
+
     def val_one_step(self, img, label):
         # TODO
-        raise NotImplementedError
+        img = img.to(self.args.device)
+        label = label.to(self.args.device)
+        pre_img = [img[:, 0]]
+        loss=torch.tensor(0.0, device=self.args.device)
+        for i in range(self.val_vi_len):
+            # Encoder
+            frame_feature = self.frame_transformation(img[:,i-1])
+            label_feature = self.label_transformation(label[:,i])
+
+            # Gaussian predictor
+            z, mu, logvar = self.Gaussian_Predictor(torch.cat((frame_feature, label_feature), dim=1))
+
+            # decode fusion
+            decoded = self.Decoder_Fusion(torch.cat((frame_feature, label_feature, z), dim=1))
+            
+            generated = self.Generator(decoded)
+            
+            #reconstruction loss
+            recon_loss = self.mse_criterion(generated, img)
+
+            #kl divergence loss
+            kl_loss = kl_criterion(mu, logvar, img.size(0))
+
+            beta = self.kl_annealing.get_beta()
+            loss += recon_loss + beta * kl_loss
+        psnr_list, avg_psnr = Caluate_PSNR(img[0], pre_img)
+        loss /= (self.val_vi_len - 1)
+        return loss, psnr_list, avg_psnr
                 
     def make_gif(self, images_list, img_name):
         new_list = []
@@ -170,7 +254,8 @@ class VAE_Model(nn.Module):
     
     def teacher_forcing_ratio_update(self):
         # TODO
-        raise NotImplementedError
+        if self.current_epoch > self.args.tfr_sde:
+            self.tfr = max(0, self.tfr - self.args.tfr_d_step)        
             
     def tqdm_bar(self, mode, pbar, loss, lr):
         pbar.set_description(f"({mode}) Epoch {self.current_epoch}, lr:{lr}" , refresh=False)
@@ -257,7 +342,7 @@ if __name__ == '__main__':
     parser.add_argument('--fast_train_epoch',   type=int, default=5,        help="Number of epoch to use fast train mode")
     
     # Kl annealing stratedy arguments
-    parser.add_argument('--kl_anneal_type',     type=str, default='Cyclical',       help="")
+    parser.add_argument('--kl_anneal_type',     type=str, default='Cyclical', choices=['Cyclical', 'Monotonic'],      help="")
     parser.add_argument('--kl_anneal_cycle',    type=int, default=10,               help="")
     parser.add_argument('--kl_anneal_ratio',    type=float, default=1,              help="")
     
