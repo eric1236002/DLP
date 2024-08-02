@@ -30,7 +30,7 @@ def Caluate_PSNR(img1, img2):
     psnr=[]
     for i in range(1,630):
         psnr.append(Generate_PSNR(img1[i], img2[i][0]).item())
-    avg_psnr = sum(psnr)/(629) ##check
+    avg_psnr = sum(psnr)/(len(psnr) - 1) ##check
     return psnr,avg_psnr
 
 
@@ -150,13 +150,12 @@ class VAE_Model(nn.Module):
         img = img.to(self.args.device)
         label = label.to(self.args.device)
         loss=torch.tensor(0.0, device=self.args.device)
+        prev_img = img[:, 0]
         for i in range(self.train_vi_len):
             # Encoder取影片的前i-1張
             if adapt_TeacherForcing:
                 prev_img = img[:,i-1]
-                frame_feature = self.frame_transformation(prev_img)
-            else:
-                frame_feature = self.frame_transformation(img)
+            frame_feature = self.frame_transformation(prev_img)
             label_feature = self.label_transformation(label[:,i])
 
 
