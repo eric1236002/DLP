@@ -78,7 +78,8 @@ class VAE_Model(nn.Module):
     def __init__(self, args):
         super(VAE_Model, self).__init__()
         self.args = args
-        
+        self.train_loss = []
+        self.tfr_history = []
         # Modules to transform image from RGB-domain to feature-domain
         self.frame_transformation = RGB_Encoder(3, args.F_dim)
         self.label_transformation = Label_Encoder(3, args.L_dim)
@@ -113,7 +114,7 @@ class VAE_Model(nn.Module):
         for i in range(self.args.num_epoch):
             train_loader = self.train_dataloader()
             adapt_TeacherForcing = True if random.random() < self.tfr else False
-            
+            epoch_loss = 0
             for (img, label) in (pbar := tqdm(train_loader, ncols=120)):
                 img = img.to(self.args.device)
                 label = label.to(self.args.device)
@@ -124,6 +125,12 @@ class VAE_Model(nn.Module):
                     self.tqdm_bar('train [TeacherForcing: ON, {:.1f}], beta: {}'.format(self.tfr, beta), pbar, loss.detach().cpu(), lr=self.scheduler.get_last_lr()[0])
                 else:
                     self.tqdm_bar('train [TeacherForcing: OFF, {:.1f}], beta: {}'.format(self.tfr, beta), pbar, loss.detach().cpu(), lr=self.scheduler.get_last_lr()[0])
+
+                epoch_loss += loss.item()  # 累加損失
+            
+            avg_epoch_loss = epoch_loss / len(train_loader)  # 計算平均損失
+            self.train_loss.append(avg_epoch_loss)  # 儲存平均損失
+            self.tfr_history.append(self.tfr)  # 記錄當前的 Teacher Forcing Ratio
             
             if self.current_epoch % self.args.per_save == 0:
                 self.save(os.path.join(self.args.save_root, f"epoch={self.current_epoch}.ckpt"))
@@ -133,17 +140,23 @@ class VAE_Model(nn.Module):
             self.scheduler.step()
             self.teacher_forcing_ratio_update()
             self.kl_annealing.update()
+        self.plot_and_save_loss()
             
             
     @torch.no_grad()
     def eval(self):
         val_loader = self.val_dataloader()
+        all_psnr = []
         for (img, label) in (pbar := tqdm(val_loader, ncols=120)):
             img = img.to(self.args.device)
             label = label.to(self.args.device)
             loss, psnr_list, avg_psnr = self.val_one_step(img, label)
+            all_psnr.extend(psnr_list)
             self.tqdm_bar('val', pbar, loss.detach().cpu(), lr=self.scheduler.get_last_lr()[0])
             print('\nEpoch: {}, PSNR: {}'.format(self.current_epoch, avg_psnr))
+        if self.current_epoch % self.args.per_save == 0:
+           self.plot_psnr(all_psnr)  # 繪製 PSNR 圖表
+
     
     def training_one_step(self, img, label, adapt_TeacherForcing):
         # TODO
@@ -288,7 +301,34 @@ class VAE_Model(nn.Module):
         self.optim.step()
 
 
+    def plot_psnr(self, psnr_list):
+        plt.figure()
+        plt.plot(psnr_list, label='PSNR per frame')
+        plt.xlabel('Frame')
+        plt.ylabel('PSNR')
+        plt.title('PSNR per Frame during Validation')
+        plt.legend()
+        plt.savefig(os.path.join(self.args.save_root, 'epoch_'+str(self.current_epoch)+'_psnr_per_frame.png'))
+        plt.close()
 
+    def plot_and_save_loss(self):
+        plt.figure()
+        plt.plot(self.train_loss, label='Training Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Training Loss over Epochs')
+        plt.legend()
+        plt.savefig(os.path.join(self.args.save_root, 'training_loss.png'))
+        plt.close()
+
+        plt.figure()
+        plt.plot(self.tfr_history, label='Teacher Forcing Ratio')
+        plt.xlabel('Epoch')
+        plt.ylabel('Teacher Forcing Ratio')
+        plt.title('Teacher Forcing Ratio over Epochs')
+        plt.legend()
+        plt.savefig(os.path.join(self.args.save_root, 'teacher_forcing_ratio.png'))
+        plt.close()
 def main(args):
     
     os.makedirs(args.save_root, exist_ok=True)
@@ -313,6 +353,8 @@ if __name__ == '__main__':
     parser.add_argument('--store_visualization',      action='store_true', help="If you want to see the result while training")
     parser.add_argument('--DR',            type=str, required=True,  help="Your Dataset Path")
     parser.add_argument('--save_root',     type=str, required=True,  help="The path to save your data")
+    # parser.add_argument('--DR',            type=str,   help="Your Dataset Path",default='/home/pp037/DLP/Lab_4/LAB4_Dataset')
+    # parser.add_argument('--save_root',     type=str,   help="The path to save your data",default='/home/pp037/DLP/Lab_4/LAB4_Dataset/checkpoint')
     parser.add_argument('--num_workers',   type=int, default=4)
     parser.add_argument('--num_epoch',     type=int, default=70,     help="number of total epoch")
     parser.add_argument('--per_save',      type=int, default=3,      help="Save checkpoint every seted epoch")
