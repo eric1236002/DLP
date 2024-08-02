@@ -77,8 +77,8 @@ class Gaussian_Predictor(nn.Sequential):
         
     def reparameterize(self, mu, logvar):
         # TODO
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
+        std = torch.exp(0.5 * logvar) #對數方差，因此需要先將其乘以 0.5 再取指數得到標準差
+        eps = torch.randn_like(std) #隨機採樣
         return mu + eps * std
 
     def forward(self, img, label):
