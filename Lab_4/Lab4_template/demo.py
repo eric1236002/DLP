@@ -40,10 +40,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument('--gt_path', type=str, default='/home/pp037/DLP/Lab_4/Lab4_template/gt.csv')
     parser.add_argument('--submission_path', type=str, default='/home/pp037/DLP/Lab_4/demo/submission.csv')
+    parser.add_argument('--save_path', type=str, default='/home/pp037/DLP/Lab_4/demo/')
     args = parser.parse_args()
     solution = pd.read_csv(args.gt_path)
     submission = pd.read_csv(args.submission_path)
     public_score, private_score = score(solution=solution, submission=submission, row_id_column_name='id')
     print('Public score: ', public_score)
     print('Private score: ', private_score)
-    
+    #save the score to a file
+    with open(args.save_path+'score.txt', 'w') as f:
+        f.write('Public score: ' + str(public_score) + '\n')
+        f.write('Private score: ' + str(private_score) + '\n')

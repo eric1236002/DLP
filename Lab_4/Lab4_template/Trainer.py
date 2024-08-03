@@ -67,6 +67,8 @@ class kl_annealing():
             current_stage = n_iter % period
         elif self.kl_anneal_type == 'Monotonic':
             current_stage = n_iter
+        elif self.kl_anneal_type == 'None':
+            return stop
         if current_stage < period * ratio :
             return start + current_stage * step
         else:
@@ -390,7 +392,7 @@ if __name__ == '__main__':
     parser.add_argument('--fast_train_epoch',   type=int, default=5,        help="Number of epoch to use fast train mode")
     
     # Kl annealing stratedy arguments
-    parser.add_argument('--kl_anneal_type',     type=str, default='Cyclical', choices=['Cyclical', 'Monotonic'],      help="")
+    parser.add_argument('--kl_anneal_type',     type=str, default='Cyclical', choices=['Cyclical', 'Monotonic', 'None'],      help="")
     parser.add_argument('--kl_anneal_cycle',    type=int, default=10,               help="")
     parser.add_argument('--kl_anneal_ratio',    type=float, default=1,              help="")
     
@@ -398,5 +400,4 @@ if __name__ == '__main__':
     
 
     args = parser.parse_args()
-    
     main(args)
