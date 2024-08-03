@@ -52,10 +52,7 @@ class kl_annealing():
     def update(self):
         # TODO
         self.current_epoch=self.current_epoch+1
-        if self.kl_anneal_type == 'Cyclical':
-            self.beta = self.frange_cycle_linear(n_iter=self.current_epoch, n_cycle=self.kl_anneal_cycle, ratio=self.kl_anneal_ratio)
-        elif self.kl_anneal_type == 'Monotonic':
-            self.beta = self.frange_cycle_linear(n_iter=self.current_epoch, n_cycle=1, ratio=self.kl_anneal_ratio)
+        self.beta = self.frange_cycle_linear(n_iter=self.current_epoch, n_cycle=1, ratio=self.kl_anneal_ratio)
     
     def get_beta(self):
         # TODO
@@ -66,8 +63,11 @@ class kl_annealing():
         period = self.args.num_epoch/n_cycle
         step = (stop-start)/(period*ratio) 
         #修改beta
-        current_stage = n_iter % period
-        if current_stage < period * ratio:
+        if self.kl_anneal_type == 'Cyclical':
+            current_stage = n_iter % period
+        elif self.kl_anneal_type == 'Monotonic':
+            current_stage = n_iter
+        if current_stage < period * ratio :
             return start + current_stage * step
         else:
             return stop
@@ -114,7 +114,7 @@ class VAE_Model(nn.Module):
         for i in range(self.args.num_epoch):
             train_loader = self.train_dataloader()
             adapt_TeacherForcing = True if random.random() < self.tfr else False
-            epoch_loss = 0
+            epoch_loss = []
             for (img, label) in (pbar := tqdm(train_loader, ncols=120)):
                 img = img.to(self.args.device)
                 label = label.to(self.args.device)
@@ -126,9 +126,9 @@ class VAE_Model(nn.Module):
                 else:
                     self.tqdm_bar('train [TeacherForcing: OFF, {:.1f}], beta: {}'.format(self.tfr, beta), pbar, loss.detach().cpu(), lr=self.scheduler.get_last_lr()[0])
 
-                epoch_loss += loss.item()  # 累加損失
+                epoch_loss.append(loss.detach().cpu())  # 累加損失
             
-            avg_epoch_loss = epoch_loss / len(train_loader)  # 計算平均損失
+            avg_epoch_loss = sum(epoch_loss) / len(epoch_loss)  # 計算平均損失
             self.train_loss.append(avg_epoch_loss)  # 儲存平均損失
             self.tfr_history.append(self.tfr)  # 記錄當前的 Teacher Forcing Ratio
             
@@ -140,6 +140,7 @@ class VAE_Model(nn.Module):
             self.scheduler.step()
             self.teacher_forcing_ratio_update()
             self.kl_annealing.update()
+            self.save_loss_csv()
         self.plot_and_save_loss()
             
             
@@ -329,6 +330,12 @@ class VAE_Model(nn.Module):
         plt.legend()
         plt.savefig(os.path.join(self.args.save_root, 'teacher_forcing_ratio.png'))
         plt.close()
+    def save_loss_csv(self):
+        with open(os.path.join(self.args.save_root, 'training_loss.csv'), 'w') as f:
+            f.write('Epoch,Training Loss,Teacher Forcing Ratio\n')
+            for i in range(len(self.train_loss)):
+                f.write(f'{i},{self.train_loss[i]},{self.tfr_history[i]}\n')
+        print('Save training loss to csv file')
 def main(args):
     
     os.makedirs(args.save_root, exist_ok=True)
