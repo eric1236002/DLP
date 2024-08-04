@@ -52,7 +52,10 @@ class kl_annealing():
     def update(self):
         # TODO
         self.current_epoch=self.current_epoch+1
-        self.beta = self.frange_cycle_linear(n_iter=self.current_epoch, n_cycle=1, ratio=self.kl_anneal_ratio)
+        if self.kl_anneal_type == 'None':
+            self.beta = 1
+        else:
+            self.beta = self.frange_cycle_linear(n_iter=self.args.num_epoch, n_cycle=self.kl_anneal_cycle, ratio=self.kl_anneal_ratio)
     
     def get_beta(self):
         # TODO
@@ -60,19 +63,18 @@ class kl_annealing():
 
     def frange_cycle_linear(self, n_iter, start=0.0, stop=1.0,  n_cycle=1, ratio=1):
         # TODO
-        period = self.args.num_epoch/n_cycle
-        step = (stop-start)/(period*ratio) 
-        #修改beta
+        period = n_iter/n_cycle
+        step = (stop-start)/(period*ratio) # linear schedule
         if self.kl_anneal_type == 'Cyclical':
-            current_stage = n_iter % period
+            if start+step*(self.current_epoch%period)<=stop:
+                return start+step*(self.current_epoch%period)
+            else:
+                return stop
         elif self.kl_anneal_type == 'Monotonic':
-            current_stage = n_iter
-        elif self.kl_anneal_type == 'None':
-            return stop
-        if current_stage < period * ratio :
-            return start + current_stage * step
-        else:
-            return stop
+            if start+step*(self.current_epoch%period)<=stop and self.current_epoch<period:
+                return start+step*(self.current_epoch%period)
+            else:
+                return stop
         
         
 
@@ -83,6 +85,9 @@ class VAE_Model(nn.Module):
         self.train_loss = []
         self.tfr_history = []
         self.avg_psnr = []
+        self.kl_loss = []
+        self.recon_loss = []
+        self.beta_history = []
         # Modules to transform image from RGB-domain to feature-domain
         self.frame_transformation = RGB_Encoder(3, args.F_dim)
         self.label_transformation = Label_Encoder(3, args.L_dim)
@@ -116,12 +121,17 @@ class VAE_Model(nn.Module):
     def training_stage(self):
         for i in range(self.args.num_epoch):
             train_loader = self.train_dataloader()
+            if self.args.tfr_update!=0:
+                if self.current_epoch %self.args.tfr_update==0:
+                    self.tfr=1
             adapt_TeacherForcing = True if random.random() < self.tfr else False
             epoch_loss = []
+            epoch_recon_loss = []
+            epoch_kl_loss = []
             for (img, label) in (pbar := tqdm(train_loader, ncols=120)):
                 img = img.to(self.args.device)
                 label = label.to(self.args.device)
-                loss = self.training_one_step(img, label, adapt_TeacherForcing)
+                loss, recon_loss, kl_loss = self.training_one_step(img, label, adapt_TeacherForcing)
                 
                 beta = self.kl_annealing.get_beta()
                 if adapt_TeacherForcing:
@@ -129,10 +139,13 @@ class VAE_Model(nn.Module):
                 else:
                     self.tqdm_bar('train [TeacherForcing: OFF, {:.1f}], beta: {}'.format(self.tfr, beta), pbar, loss.detach().cpu(), lr=self.scheduler.get_last_lr()[0])
 
-                epoch_loss.append(loss.detach().cpu())  # 累加損失
-            
-            avg_epoch_loss = sum(epoch_loss) / len(epoch_loss)  # 計算平均損失
-            self.train_loss.append(avg_epoch_loss)  # 儲存平均損失
+                epoch_loss.append(loss.detach().cpu())
+                epoch_recon_loss.append(recon_loss.detach().cpu())
+                epoch_kl_loss.append(kl_loss.detach().cpu())
+            self.beta_history.append(beta)
+            self.recon_loss.append(sum(epoch_recon_loss) / len(epoch_recon_loss))
+            self.kl_loss.append(sum(epoch_kl_loss) / len(epoch_kl_loss))
+            self.train_loss.append(sum(epoch_loss) / len(epoch_loss))  # 儲存平均損失
             self.tfr_history.append(self.tfr)  # 記錄當前的 Teacher Forcing Ratio
             
             if self.current_epoch % self.args.per_save == 0:
@@ -144,9 +157,7 @@ class VAE_Model(nn.Module):
             self.teacher_forcing_ratio_update()
             self.kl_annealing.update()
             self.save_loss_csv()
-            self.save_psnr_csv()
         self.plot_and_save_loss()
-        self.plot_avg_psnr()
             
             
     @torch.no_grad()
@@ -171,6 +182,8 @@ class VAE_Model(nn.Module):
         img = img.to(self.args.device)
         label = label.to(self.args.device)
         loss=torch.tensor(0.0, device=self.args.device)
+        recon_loss_sum = torch.tensor(0.0, device=self.args.device)
+        kl_loss_sum = torch.tensor(0.0, device=self.args.device)
         first_img = img[:, 0]
         for i in range(self.train_vi_len):
             # Encoder取影片的前i-1張
@@ -190,28 +203,32 @@ class VAE_Model(nn.Module):
             
             #reconstruction loss
             recon_loss = self.mse_criterion(generated, img[:,i])
-
+            recon_loss_sum += recon_loss
             #kl divergence loss
             kl_loss = kl_criterion(mu, logvar, img.size(0))
+            kl_loss_sum += kl_loss
+            
 
             beta = self.kl_annealing.get_beta()
             loss += recon_loss + beta * kl_loss
-        loss /= (self.train_vi_len-1)
+        recon_loss_sum /= (self.train_vi_len-1)
+        kl_loss_sum /= (self.train_vi_len-1)
         self.optim.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self.parameters(), 1.)
         self.optim.step()
-        return loss
+        return loss, recon_loss_sum, kl_loss_sum
 
     def val_one_step(self, img, label):
         # TODO
         img = img.to(self.args.device)
         label = label.to(self.args.device)
-        pre_img = [img[:, 0]]
+        pre_img = img[:, 0]
+        image_list = [pre_img]
         loss=torch.tensor(0.0, device=self.args.device)
         for i in range(self.val_vi_len):
             # Encoder
-            frame_feature = self.frame_transformation(img[:,i-1])
+            frame_feature = self.frame_transformation(pre_img)
             label_feature = self.label_transformation(label[:,i])
 
             # Gaussian predictor
@@ -221,7 +238,7 @@ class VAE_Model(nn.Module):
             decoded = self.Decoder_Fusion(frame_feature, label_feature, z)
             
             generated = self.Generator(decoded)
-            pre_img.append(generated)
+            image_list.append(generated)
             #reconstruction loss
             recon_loss = self.mse_criterion(generated, img[:,i])
 
@@ -229,7 +246,7 @@ class VAE_Model(nn.Module):
             kl_loss = kl_criterion(mu, logvar, img.size(0))
 
             loss += recon_loss + kl_loss
-        psnr_list, avg_psnr = Caluate_PSNR(img[0], pre_img)
+        psnr_list, avg_psnr = Caluate_PSNR(img[0], image_list)
         loss /= (self.val_vi_len - 1)
         return loss, psnr_list, avg_psnr
                 
@@ -337,10 +354,39 @@ class VAE_Model(nn.Module):
         plt.ylabel('Teacher Forcing Ratio')
         plt.title('Teacher Forcing Ratio over Epochs')
         plt.legend()
+        plt.ylim([min(self.tfr_history), np.percentile(self.tfr_history, 95)])
         plt.savefig(os.path.join(self.args.save_root, 'teacher_forcing_ratio.png'))
         plt.close()
 
-    def plot_avg_psnr(self):
+        plt.figure()
+        plt.plot(self.kl_loss, label='KL Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('KL Loss')
+        plt.title('KL Loss over Epochs')
+        plt.legend()
+        plt.ylim([min(self.kl_loss), np.percentile(self.kl_loss, 95)])
+        plt.savefig(os.path.join(self.args.save_root, 'kl_loss.png'))
+        plt.close()
+
+        plt.figure()
+        plt.plot(self.recon_loss, label='Reconstruction Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Reconstruction Loss')
+        plt.title('Reconstruction Loss over Epochs')
+        plt.legend()
+        plt.ylim([min(self.recon_loss), np.percentile(self.recon_loss, 95)])
+        plt.savefig(os.path.join(self.args.save_root, 'reconstruction_loss.png'))
+        plt.close()
+
+        plt.figure()
+        plt.plot(self.beta_history, label='Beta')
+        plt.xlabel('Epoch')
+        plt.ylabel('Beta')
+        plt.title('Beta over Epochs')
+        plt.legend()
+        plt.savefig(os.path.join(self.args.save_root, 'beta.png'))
+        plt.close()
+
         plt.figure()
         plt.plot(self.avg_psnr, label='Average PSNR')
         plt.xlabel('Epoch')
@@ -349,17 +395,14 @@ class VAE_Model(nn.Module):
         plt.legend()
         plt.savefig(os.path.join(self.args.save_root, 'avg_psnr.png'))
         plt.close()
+
     def save_loss_csv(self):
         with open(os.path.join(self.args.save_root, 'training_loss.csv'), 'w') as f:
-            f.write('Epoch,Training Loss,Teacher Forcing Ratio\n')
+            f.write('Epoch,Training Loss,Teacher Forcing Ratio,KL Loss,Reconstruction Loss,Beta,Average PSNR\n')
             for i in range(len(self.train_loss)):
-                f.write(f'{i},{self.train_loss[i]},{self.tfr_history[i]}\n')
+                f.write(f'{i},{self.train_loss[i]},{self.tfr_history[i]},{self.kl_loss[i]},{self.recon_loss[i]},{self.beta_history[i]},{self.avg_psnr[i]}\n')
         print('Save training loss to csv file')
-    def save_psnr_csv(self):
-        with open(os.path.join(self.args.save_root, 'avg_psnr.csv'), 'w') as f:
-            f.write('Epoch,PSNR\n')
-            for i in range(len(self.avg_psnr)):
-                f.write(f'{i},{self.avg_psnr[i]}\n')
+
 
 def main(args):
     
@@ -408,6 +451,7 @@ if __name__ == '__main__':
     parser.add_argument('--tfr_sde',       type=int,   default=10,   help="The epoch that teacher forcing ratio start to decay")
     parser.add_argument('--tfr_d_step',    type=float, default=0.1,  help="Decay step that teacher forcing ratio adopted")
     parser.add_argument('--ckpt_path',     type=str,    default=None,help="The path of your checkpoints")   
+    parser.add_argument('--tfr_update',    type=int,    default=0,   help="Cycle of teacher forcing ratio update")
     
     # Training Strategy
     parser.add_argument('--fast_train',         action='store_true')
