@@ -127,7 +127,6 @@ class Test_model(VAE_Model):
         for i in range(1,630):
             frame_feature = self.frame_transformation(pre_img)
             label_feature = self.label_transformation(label[i])
-            noise = self.Gaussian_Predictor(frame_feature, label_feature)
             # Gaussian predictor
             z, mu, logvar = self.Gaussian_Predictor(frame_feature, label_feature)
 

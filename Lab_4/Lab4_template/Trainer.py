@@ -82,6 +82,7 @@ class VAE_Model(nn.Module):
         self.args = args
         self.train_loss = []
         self.tfr_history = []
+        self.avg_psnr = []
         # Modules to transform image from RGB-domain to feature-domain
         self.frame_transformation = RGB_Encoder(3, args.F_dim)
         self.label_transformation = Label_Encoder(3, args.L_dim)
@@ -143,7 +144,9 @@ class VAE_Model(nn.Module):
             self.teacher_forcing_ratio_update()
             self.kl_annealing.update()
             self.save_loss_csv()
+            self.save_psnr_csv()
         self.plot_and_save_loss()
+        self.plot_avg_psnr()
             
             
     @torch.no_grad()
@@ -155,10 +158,12 @@ class VAE_Model(nn.Module):
             label = label.to(self.args.device)
             loss, psnr_list, avg_psnr = self.val_one_step(img, label)
             all_psnr.extend(psnr_list)
+            self.avg_psnr.append(avg_psnr)
             self.tqdm_bar('val', pbar, loss.detach().cpu(), lr=self.scheduler.get_last_lr()[0])
             print('\nEpoch: {}, PSNR: {}'.format(self.current_epoch, avg_psnr))
         if self.current_epoch % self.args.per_save == 0:
            self.plot_psnr(all_psnr)  # 繪製 PSNR 圖表
+        
 
     
     def training_one_step(self, img, label, adapt_TeacherForcing):
@@ -166,12 +171,12 @@ class VAE_Model(nn.Module):
         img = img.to(self.args.device)
         label = label.to(self.args.device)
         loss=torch.tensor(0.0, device=self.args.device)
-        prev_img = img[:, 0]
+        first_img = img[:, 0]
         for i in range(self.train_vi_len):
             # Encoder取影片的前i-1張
             if adapt_TeacherForcing:
-                prev_img = img[:,i-1]
-            frame_feature = self.frame_transformation(prev_img)
+                first_img = img[:,i-1]
+            frame_feature = self.frame_transformation(first_img)
             label_feature = self.label_transformation(label[:,i])
 
 
@@ -307,6 +312,7 @@ class VAE_Model(nn.Module):
     def plot_psnr(self, psnr_list):
         plt.figure()
         plt.plot(psnr_list, label='PSNR per frame')
+        plt.axhline(y=np.mean(psnr_list), color='r', linestyle='--', label=f'Average PSNR:{np.mean(psnr_list):.2f}')
         plt.xlabel('Frame')
         plt.ylabel('PSNR')
         plt.title('PSNR per Frame during Validation')
@@ -321,6 +327,7 @@ class VAE_Model(nn.Module):
         plt.ylabel('Loss')
         plt.title('Training Loss over Epochs')
         plt.legend()
+        plt.ylim([min(self.train_loss), np.percentile(self.train_loss, 95)])
         plt.savefig(os.path.join(self.args.save_root, 'training_loss.png'))
         plt.close()
 
@@ -332,12 +339,28 @@ class VAE_Model(nn.Module):
         plt.legend()
         plt.savefig(os.path.join(self.args.save_root, 'teacher_forcing_ratio.png'))
         plt.close()
+
+    def plot_avg_psnr(self):
+        plt.figure()
+        plt.plot(self.avg_psnr, label='Average PSNR')
+        plt.xlabel('Epoch')
+        plt.ylabel('PSNR')
+        plt.title('Average PSNR over Epochs')
+        plt.legend()
+        plt.savefig(os.path.join(self.args.save_root, 'avg_psnr.png'))
+        plt.close()
     def save_loss_csv(self):
         with open(os.path.join(self.args.save_root, 'training_loss.csv'), 'w') as f:
             f.write('Epoch,Training Loss,Teacher Forcing Ratio\n')
             for i in range(len(self.train_loss)):
                 f.write(f'{i},{self.train_loss[i]},{self.tfr_history[i]}\n')
         print('Save training loss to csv file')
+    def save_psnr_csv(self):
+        with open(os.path.join(self.args.save_root, 'avg_psnr.csv'), 'w') as f:
+            f.write('Epoch,PSNR\n')
+            for i in range(len(self.avg_psnr)):
+                f.write(f'{i},{self.avg_psnr[i]}\n')
+
 def main(args):
     
     os.makedirs(args.save_root, exist_ok=True)
