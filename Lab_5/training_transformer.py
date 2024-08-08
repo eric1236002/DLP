@@ -10,7 +10,40 @@ from models import MaskGit as VQGANTransformer
 from utils import LoadTrainData
 import yaml
 from torch.utils.data import DataLoader
+import wandb
 
+class WarmupLinearLRSchedule:
+    """
+    Implements Warmup learning rate schedule until 'warmup_steps', going from 'init_lr' to 'peak_lr' for multiple optimizers.
+    """
+    def __init__(self, optimizer, init_lr, peak_lr, end_lr, warmup_epochs, epochs=100, current_step=0):
+        self.init_lr = init_lr
+        self.peak_lr = peak_lr
+        self.optimizer = optimizer
+        self.warmup_rate = (peak_lr - init_lr) / warmup_epochs
+        self.decay_rate = (end_lr - peak_lr) / (epochs - warmup_epochs)
+        self.update_steps = current_step
+        self.lr = init_lr
+        self.warmup_steps = warmup_epochs
+        self.epochs = epochs
+        if current_step > 0:
+            self.lr = self.peak_lr + self.decay_rate * (current_step - 1 - warmup_epochs)
+
+    def set_lr(self, lr):
+        print(f"Setting lr: {lr}")
+        for g in self.optimizer.param_groups:
+            g['lr'] = lr
+
+    def step(self):
+        if self.update_steps <= self.warmup_steps:
+            lr = self.init_lr + self.warmup_rate * self.update_steps
+        # elif self.warmup_steps < self.update_steps <= self.epochs:
+        else:
+            lr = max(0., self.lr + self.decay_rate)
+        self.set_lr(lr)
+        self.lr = lr
+        self.update_steps += 1
+        return self.lr
 #TODO2 step1-4: design the transformer training strategy
 class TrainTransformer:
     def __init__(self, args, MaskGit_CONFIGS):
@@ -31,10 +64,10 @@ class TrainTransformer:
         step = self.args.start_from_epoch * len(train_loader)
         with tqdm(train_loader) as pbar:
             for image in pbar:
+                image = image.to(self.args.device)
                 pbar.set_description(f"Training Epoch {self.args.epochs}, learning rate: {self.optim.param_groups[0]['lr']}")
-                self.scheduler.step()
                 logits, target  = self.model(image)
-                loss = F.cross_entropy(logits, target-1, logits.size(-1), target.reshape(-1))
+                loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
                 loss.backward()
                 if step % self.args.accum_grad == 0: #做一次梯度更新
                     self.optim.step()
@@ -51,15 +84,16 @@ class TrainTransformer:
         val_loss = 0
         with tqdm(val_loader) as pbar:
             for image in pbar:
+                image = image.to(self.args.device)
                 pbar.set_description(f"Evaluating Epoch {self.args.epochs}")
                 logits, target  = self.model(image)
-                loss = F.cross_entropy(logits, target-1, logits.size(-1), target.reshape(-1))
+                loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
                 val_loss += loss.item()
         return val_loss / len(val_loader)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=args.learning_rate)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+        scheduler = scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
         return optimizer,scheduler
 
 
@@ -76,18 +110,18 @@ if __name__ == '__main__':
     parser.add_argument('--accum-grad', type=int, default=10, help='Number for gradient accumulation.')
 
     #you can modify the hyperparameters 
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train.')
+    parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train.')
     parser.add_argument('--save-per-epoch', type=int, default=1, help='Save CKPT per ** epochs(defcault: 1)')
+    parser.add_argument('--save_root', type=str, default='./checkpoints/', help='Save CKPT root path')
     parser.add_argument('--start-from-epoch', type=int, default=0, help='Which epoch to start from.')
     parser.add_argument('--ckpt-interval', type=int, default=0, help='Number of epochs to train.')
-    parser.add_argument('--learning-rate', type=float, default=0, help='Learning rate.')
-    parser.add_argument('--step-size', type=int, default=10, help='Step size for scheduler.')
-    parser.add_argument('--gamma', type=float, default=0.1, help='Gamma for scheduler.')
-
+    parser.add_argument('--learning-rate', type=float, default=0.01, help='Learning rate.')
+    parser.add_argument('--warmup-epochs', type=int, default=10, help='Number of warmup epochs.')
+    parser.add_argument('--wandb-run-name', type=str, default='transformer', help='Name of the wandb run.')
     parser.add_argument('--MaskGitConfig', type=str, default='config/MaskGit.yml', help='Configurations for TransformerVQGAN')
 
     args = parser.parse_args()
-
+    os.makedirs(args.save_root, exist_ok=True)
     MaskGit_CONFIGS = yaml.safe_load(open(args.MaskGitConfig, 'r'))
     train_transformer = TrainTransformer(args, MaskGit_CONFIGS)
 
@@ -114,14 +148,20 @@ if __name__ == '__main__':
     best_train_loss_epoch = 0
     best_val_loss = float('inf')
     best_val_loss_epoch = 0
+    wandb.init(project="Lab5",
+            #    mode='disabled',
+               config=vars(args),
+               name=args.wandb_run_name,
+               save_code=True)
     for epoch in range(args.start_from_epoch+1, args.epochs+1):
         train_loss = train_transformer.train_one_epoch(train_loader)
         val_loss = train_transformer.eval_one_epoch(val_loader)
         train_loss_history.append(train_loss)
         val_loss_history.append(val_loss)
         if epoch % args.save_per_epoch == 0:
-            torch.save(args.model.state_dict(), os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
-        torch.save(args.model.state_dict(), os.path.join("checkpoints", "transformer_current.pt"))
+            torch.save(train_transformer.model.state_dict(), os.path.join(args.save_root, f"transformer_epoch_{epoch}.pt"))
+        torch.save(train_transformer.model.state_dict(), os.path.join(args.save_root, "transformer_current.pt"))
+        train_transformer.scheduler.step()
         if train_loss < best_train_loss:
             best_train_loss = train_loss
             best_train_loss_epoch = epoch
@@ -129,6 +169,12 @@ if __name__ == '__main__':
             best_val_loss = val_loss
             best_val_loss_epoch = epoch
         print(f"Current Epoch {epoch}, train_loss: {train_loss}, val_loss: {val_loss}")
+        wandb.log({
+            "Train Loss": train_loss,
+            "Valid Loss": val_loss,
+            "Gamma": train_transformer.model.gamma(epoch / args.epochs),
+            "Learning Rate": train_transformer.scheduler.get_last_lr()[0]
+        })
     print(f"Best train loss epoch: {best_train_loss_epoch}-->{best_train_loss}, Best val loss epoch: {best_val_loss_epoch}-->{best_val_loss}")
     with open("loss.csv", "w") as f:
         f.write("train_loss,val_loss\n")

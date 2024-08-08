@@ -35,6 +35,7 @@ class MaskGit(nn.Module):
     @torch.no_grad()
     def encode_to_z(self, x):
         _,codebook_indices, _ = self.vqgan.encode(x)
+        codebook_indices = codebook_indices.view(codebook_indices.shape[0], -1)
         return codebook_indices
     
 ##TODO2 step1-2:    
@@ -65,11 +66,12 @@ class MaskGit(nn.Module):
         During training, we sample a subset of tokens and replace them with a special [MASK] token.
         '''
         z_indices = self.encode_to_z(x)
+        z_indices = z_indices.view(x.size(0), -1)
         mask_ratio = self.gamma(torch.rand(1).item())
-        mask = torch.rand(z_indices.size(0), z_indices.size(1)) < mask_ratio
-        z_indices[mask] = self.mask_token_id
+        mask = torch.rand(z_indices.size(0), z_indices.size(1), device=x.device) < mask_ratio
+        mask_indices = torch.where(mask, z_indices, torch.tensor(self.mask_token_id, device=x.device))
         
-        logits = self.transformer(z_indices)  #transformer predict the probability of tokens
+        logits = self.transformer(mask_indices)  #transformer predict the probability of tokens
 
         return logits, z_indices
     

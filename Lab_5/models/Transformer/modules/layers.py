@@ -32,12 +32,12 @@ class MultiHeadAttention(nn.Module):
         v = self.wv(x).view(batch_size, num_image_tokens, self.num_heads, self.head_dim).transpose(1, 2)
         # softmax(QK^T / sqrt(d_k))
         attn = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-        attn = attn.softmax(dim=-1)
-        attn = self.dropout(attn)
-        output = attn @ v
+        attn = self.dropout(attn)        
         #(batch_size, num_heads, seq_length, head_dim) -> (batch_size, seq_length, num_heads, head_dim)再恢復到形狀 (batch_size, seq_length, dim)
-        output = output.transpose(1, 2).contiguous().view(batch_size, num_image_tokens, dim)
-        return output
+        out = torch.matmul(attn, v)\
+                .permute(0, 2, 1, 3).reshape(batch_size, num_image_tokens, dim) 
+        out = out.softmax(dim=-1)
+        return out
 
 class MLP(nn.Sequential):
     def __init__(self, dim=768, hidden_dim=3072, drop_rate=0.1):
