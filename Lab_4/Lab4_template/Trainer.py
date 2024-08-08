@@ -20,6 +20,16 @@ import imageio
 import matplotlib.pyplot as plt
 from math import log10
 
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 def Generate_PSNR(imgs1, imgs2, data_range=1.):
     """PSNR for torch tensor"""
     mse = nn.functional.mse_loss(imgs1, imgs2) # wrong computation for batch size > 1
@@ -407,6 +417,7 @@ class VAE_Model(nn.Module):
 def main(args):
     
     os.makedirs(args.save_root, exist_ok=True)
+    set_seed(args.seed)
     model = VAE_Model(args).to(args.device)
     model.load_checkpoint()
     if args.test:
@@ -463,7 +474,7 @@ if __name__ == '__main__':
     parser.add_argument('--kl_anneal_cycle',    type=int, default=10,               help="")
     parser.add_argument('--kl_anneal_ratio',    type=float, default=1,              help="")
     
-
+    parser.add_argument('--seed', type=int, default=42)
     
 
     args = parser.parse_args()

@@ -34,8 +34,8 @@ class MaskGit(nn.Module):
 ##TODO2 step1-1: input x fed to vqgan encoder to get the latent and zq
     @torch.no_grad()
     def encode_to_z(self, x):
-        raise Exception('TODO2 step1-1!')
-        return None
+        _,codebook_indices, _ = self.vqgan.encode(x)
+        return codebook_indices
     
 ##TODO2 step1-2:    
     def gamma_func(self, mode="cosine"):
@@ -51,53 +51,59 @@ class MaskGit(nn.Module):
 
         """
         if mode == "linear":
-            raise Exception('TODO2 step1-2!')
-            return None
+            return lambda x: 1 - x
         elif mode == "cosine":
-            raise Exception('TODO2 step1-2!')
-            return None
+            return lambda x: 0.5*(1 + math.cos(math.pi * x))
         elif mode == "square":
-            raise Exception('TODO2 step1-2!')
-            return None
+            return lambda x: 1 - x**2
         else:
             raise NotImplementedError
 
 ##TODO2 step1-3:            
     def forward(self, x):
+        '''
+        During training, we sample a subset of tokens and replace them with a special [MASK] token.
+        '''
+        z_indices = self.encode_to_z(x)
+        mask_ratio = self.gamma(torch.rand(1).item())
+        mask = torch.rand(z_indices.size(0), z_indices.size(1)) < mask_ratio
+        z_indices[mask] = self.mask_token_id
         
-        z_indices=None #ground truth
-        logits = None  #transformer predict the probability of tokens
-        raise Exception('TODO2 step1-3!')
+        logits = self.transformer(z_indices)  #transformer predict the probability of tokens
+
         return logits, z_indices
     
 ##TODO3 step1-1: define one iteration decoding   
     @torch.no_grad()
-    def inpainting(self):
-        raise Exception('TODO3 step1-1!')
-        logits = self.transformer(None)
+    def inpainting(self, ratio, z_indices, mask, mask_num):
+        #將mask的token值設為0'
+        z_indices[mask] = 0
+        
         #Apply softmax to convert logits into a probability distribution across the last dimension.
-        logits = None
+        logits = torch.softmax(self.transformer(z_indices), dim=-1) 
 
         #FIND MAX probability for each token value
-        z_indices_predict_prob, z_indices_predict = None
+        z_indices_predict_prob, z_indices_predict = logits.max(dim=-1)
 
-        ratio=None 
-        #predicted probabilities add temperature annealing gumbel noise as confidence
-        g = None  # gumbel noise
+
+        #predicted probabilities add temperature annealing gumbel noise as confidence G=−log(−log(U))
+        g = -torch.log(-torch.log(torch.rand_like(z_indices_predict_prob) + 1e-20) + 1e-20)
         temperature = self.choice_temperature * (1 - ratio)
         confidence = z_indices_predict_prob + temperature * g
         
+
         #hint: If mask is False, the probability should be set to infinity, so that the tokens are not affected by the transformer's prediction
+        confidence[~mask] = float('inf')
         #sort the confidence for the rank 
+        sorted_confidence, sorted_indices = torch.sort(confidence, descending=True)
         #define how much the iteration remain predicted tokens by mask scheduling
+        num_keep_tokens = int((1 - ratio) * mask_num)
+        mask_bc = torch.ones_like(mask, dtype=torch.bool)
+        mask_bc[sorted_indices[:, :num_keep_tokens]] = False
         #At the end of the decoding process, add back the original token values that were not masked to the predicted tokens
-        mask_bc=None
+        z_indices_predict[~mask] = z_indices[~mask]
         return z_indices_predict, mask_bc
     
 __MODEL_TYPE__ = {
     "MaskGit": MaskGit
 }
-    
-
-
-        

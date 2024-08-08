@@ -181,6 +181,7 @@ class Test_model(VAE_Model):
 
 def main(args):
     os.makedirs(args.save_root, exist_ok=True)
+    torch.manual_seed(args.seed)
     model = Test_model(args).to(args.device)
     model.load_checkpoint()
     model.eval()
@@ -234,7 +235,7 @@ if __name__ == '__main__':
     parser.add_argument('--kl_anneal_ratio',    type=float, default=1,              help="")
     
 
-    
+    parser.add_argument('--seed', type=int, default=42)
 
     args = parser.parse_args()
     

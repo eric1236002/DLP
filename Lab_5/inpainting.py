@@ -11,7 +11,7 @@ import os
 from models import MaskGit as VQGANTransformer
 import yaml
 import torch.nn.functional as F
-
+from tqdm import tqdm
 class MaskGIT:
     def __init__(self, args, MaskGit_CONFIGS):
         self.model = VQGANTransformer(MaskGit_CONFIGS["model_param"]).to(device=args.device)
@@ -41,23 +41,22 @@ class MaskGIT:
 
         self.model.eval()
         with torch.no_grad():
-            z_indices = None #z_indices: masked tokens (b,16*16)
+            z_indices = self.model.get_z_indices(image)#z_indices: masked tokens (b,16*16)
             mask_num = mask_b.sum() #total number of mask token 
             z_indices_predict=z_indices
             mask_bc=mask_b
             mask_b=mask_b.to(device=self.device)
             mask_bc=mask_bc.to(device=self.device)
             
-            raise Exception('TODO3 step1-1!')
             ratio = 0
             #iterative decoding for loop design
             #Hint: it's better to save original mask and the updated mask by scheduling separately
             for step in range(self.total_iter):
                 if step == self.sweet_spot:
                     break
-                ratio = None #this should be updated
+                ratio = step / self.total_iter #this should be updated 用於計算每次迭代要碼的比例
     
-                z_indices_predict, mask_bc = self.model.inpainting()
+                z_indices_predict, mask_bc = self.model.inpainting(ratio, z_indices, mask_b, mask_num)
 
                 #static method yon can modify or not, make sure your visualization results are correct
                 mask_i=mask_bc.view(1, 16, 16)
@@ -138,12 +137,15 @@ if __name__ == '__main__':
     maskgit = MaskGIT(args, MaskGit_CONFIGS)
 
     i=0
-    for image, mask in zip(t.mi_ori, t.mask_ori):
-        image=image.to(device=args.device)
+    with tqdm(total=len(t.mi_ori)) as pbar:
+        for image, mask in zip(t.mi_ori, t.mask_ori):
+            image=image.to(device=args.device)
         mask=mask.to(device=args.device)
         mask_b=t.get_mask_latent(mask)       
         maskgit.inpainting(image,mask_b,i)
         i+=1
+        pbar.update(1)
+    pbar.close()
         
 
 
