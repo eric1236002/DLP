@@ -41,7 +41,7 @@ class MaskGIT:
 
         self.model.eval()
         with torch.no_grad():
-            z_indices = self.model.get_z_indices(image)#z_indices: masked tokens (b,16*16)
+            z_indices = self.model.encode_to_z(image)#z_indices: masked tokens (b,16*16)
             mask_num = mask_b.sum() #total number of mask token 
             z_indices_predict=z_indices
             mask_bc=mask_b
@@ -120,15 +120,15 @@ if __name__ == '__main__':
     
     
 #TODO3 step1-2: modify the path, MVTM parameters
-    parser.add_argument('--load-transformer-ckpt-path', type=str, default='', help='load ckpt')
+    parser.add_argument('--load-transformer-ckpt-path', type=str, default='/home/pp037/DLP/Lab_5/checkpoints/transformer_last.pt', help='load ckpt')
     
     #dataset path
     parser.add_argument('--test-maskedimage-path', type=str, default='./cat_face/masked_image', help='Path to testing image dataset.')
-    parser.add_argument('--test-mask-path', type=str, default='./mask64', help='Path to testing mask dataset.')
+    parser.add_argument('--test-mask-path', type=str, default='./cat_face/mask64', help='Path to testing mask dataset.')
     #MVTM parameter
-    parser.add_argument('--sweet-spot', type=int, default=0, help='sweet spot: the best step in total iteration')
-    parser.add_argument('--total-iter', type=int, default=0, help='total step for mask scheduling')
-    parser.add_argument('--mask-func', type=str, default='0', help='mask scheduling function')
+    parser.add_argument('--sweet-spot', type=int, default=100, help='sweet spot: the best step in total iteration')
+    parser.add_argument('--total-iter', type=int, default=7, help='total step for mask scheduling')
+    parser.add_argument('--mask-func', type=str, default='Cosine', help='mask scheduling function')
 
     args = parser.parse_args()
 

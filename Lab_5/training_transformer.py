@@ -69,9 +69,8 @@ class TrainTransformer:
                 logits, target  = self.model(image)
                 loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
                 loss.backward()
-                if step % self.args.accum_grad == 0: #做一次梯度更新
-                    self.optim.step()
-                    self.optim.zero_grad()
+                self.optim.step()   
+                self.optim.zero_grad()
                 step += 1
                 train_loss += loss.item()
                 pbar.set_postfix(loss=loss.item())
@@ -106,7 +105,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda:0", help='Which device the training is on.')
     parser.add_argument('--num_workers', type=int, default=4, help='Number of worker')
     parser.add_argument('--batch-size', type=int, default=10, help='Batch size for training.')
-    parser.add_argument('--partial', type=float, default=1.0, help='Number of epochs to train (default: 50)')    
+    parser.add_argument('--partial', type=float, default=0.005, help='Number of epochs to train (default: 50)')    
     parser.add_argument('--accum-grad', type=int, default=10, help='Number for gradient accumulation.')
 
     #you can modify the hyperparameters 
@@ -149,7 +148,7 @@ if __name__ == '__main__':
     best_val_loss = float('inf')
     best_val_loss_epoch = 0
     wandb.init(project="Lab5",
-            #    mode='disabled',
+               mode='disabled',
                config=vars(args),
                name=args.wandb_run_name,
                save_code=True)
@@ -159,8 +158,8 @@ if __name__ == '__main__':
         train_loss_history.append(train_loss)
         val_loss_history.append(val_loss)
         if epoch % args.save_per_epoch == 0:
-            torch.save(train_transformer.model.state_dict(), os.path.join(args.save_root, f"transformer_epoch_{epoch}.pt"))
-        torch.save(train_transformer.model.state_dict(), os.path.join(args.save_root, "transformer_current.pt"))
+            torch.save(train_transformer.model.transformer.state_dict(), os.path.join(args.save_root, f"transformer_epoch_{epoch}.pt"))
+        torch.save(train_transformer.model.transformer.state_dict(), os.path.join(args.save_root, "transformer_last.pt"))
         train_transformer.scheduler.step()
         if train_loss < best_train_loss:
             best_train_loss = train_loss

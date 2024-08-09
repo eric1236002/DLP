@@ -15,6 +15,7 @@ class MultiHeadAttention(nn.Module):
         self.wv = nn.Linear(dim, dim)
 
         self.dropout = nn.Dropout(p=attn_drop)
+        self.linear_out = nn.Linear(self.dim, self.dim)
 
 
     def forward(self, x):
@@ -36,7 +37,7 @@ class MultiHeadAttention(nn.Module):
         #(batch_size, num_heads, seq_length, head_dim) -> (batch_size, seq_length, num_heads, head_dim)再恢復到形狀 (batch_size, seq_length, dim)
         out = torch.matmul(attn, v)\
                 .permute(0, 2, 1, 3).reshape(batch_size, num_image_tokens, dim) 
-        out = out.softmax(dim=-1)
+        out = self.linear_out(out)
         return out
 
 class MLP(nn.Sequential):

@@ -79,10 +79,10 @@ class MaskGit(nn.Module):
     @torch.no_grad()
     def inpainting(self, ratio, z_indices, mask, mask_num):
         #將mask的token值設為0'
-        z_indices[mask] = 0
+        mask_indices=z_indices*(~mask)+mask*torch.full_like(z_indices,self.mask_token_id)
         
         #Apply softmax to convert logits into a probability distribution across the last dimension.
-        logits = torch.softmax(self.transformer(z_indices), dim=-1) 
+        logits = torch.softmax(self.transformer(mask_indices), dim=-1) 
 
         #FIND MAX probability for each token value
         z_indices_predict_prob, z_indices_predict = logits.max(dim=-1)
@@ -93,17 +93,16 @@ class MaskGit(nn.Module):
         temperature = self.choice_temperature * (1 - ratio)
         confidence = z_indices_predict_prob + temperature * g
         
-
         #hint: If mask is False, the probability should be set to infinity, so that the tokens are not affected by the transformer's prediction
-        confidence[~mask] = float('inf')
+        confidence= confidence*(~mask)+float('inf')*mask
         #sort the confidence for the rank 
         sorted_confidence, sorted_indices = torch.sort(confidence, descending=True)
         #define how much the iteration remain predicted tokens by mask scheduling
         num_keep_tokens = int((1 - ratio) * mask_num)
-        mask_bc = torch.ones_like(mask, dtype=torch.bool)
+        mask_bc = torch.ones_like(z_indices, dtype=torch.bool)
         mask_bc[sorted_indices[:, :num_keep_tokens]] = False
         #At the end of the decoding process, add back the original token values that were not masked to the predicted tokens
-        z_indices_predict[~mask] = z_indices[~mask]
+        z_indices_predict=mask*z_indices_predict+(~mask)*z_indices
         return z_indices_predict, mask_bc
     
 __MODEL_TYPE__ = {
