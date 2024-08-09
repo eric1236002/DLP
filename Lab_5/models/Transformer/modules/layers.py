@@ -35,8 +35,7 @@ class MultiHeadAttention(nn.Module):
         attn = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
         attn = self.dropout(attn)        
         #(batch_size, num_heads, seq_length, head_dim) -> (batch_size, seq_length, num_heads, head_dim)再恢復到形狀 (batch_size, seq_length, dim)
-        out = torch.matmul(attn, v)\
-                .permute(0, 2, 1, 3).reshape(batch_size, num_image_tokens, dim) 
+        out = torch.matmul(attn, v).permute(0, 2, 1, 3).reshape(batch_size, num_image_tokens, dim) 
         out = self.linear_out(out)
         return out
 
