@@ -34,8 +34,8 @@ class MaskGit(nn.Module):
 ##TODO2 step1-1: input x fed to vqgan encoder to get the latent and zq
     @torch.no_grad()
     def encode_to_z(self, x):
-        _,codebook_indices, _ = self.vqgan.encode(x)
-        codebook_indices = codebook_indices.view(codebook_indices.shape[0], -1)
+        z_q ,codebook_indices, _ = self.vqgan.encode(x)
+        codebook_indices = codebook_indices.view(z_q.shape[0], -1)
         return codebook_indices
     
 ##TODO2 step1-2:    
@@ -69,7 +69,7 @@ class MaskGit(nn.Module):
         z_indices = z_indices.view(x.size(0), -1)
         mask_ratio = self.gamma(torch.rand(1).item())
         mask = torch.rand(z_indices.size(0), z_indices.size(1), device=x.device) < mask_ratio
-        mask_indices = torch.where(mask, torch.full_like(z_indices, self.mask_token_id), z_indices)
+        mask_indices = torch.where(mask, z_indices, torch.tensor(self.mask_token_id, device=x.device))
         
         logits = self.transformer(mask_indices)  #transformer predict the probability of tokens
 
@@ -94,16 +94,13 @@ class MaskGit(nn.Module):
         confidence = z_indices_predict_prob + temperature * g
         
         #hint: If mask is False, the probability should be set to infinity, so that the tokens are not affected by the transformer's prediction
-        confidence= torch.where(mask, confidence, torch.full_like(confidence, float('inf')))
-        #sort the confidence for the rank 
-        sorted_confidence, sorted_indices = torch.sort(confidence, descending=True)
+        confidence[~mask] = float('inf')
         #define how much the iteration remain predicted tokens by mask scheduling
         num_keep_tokens = int((1 - ratio) * mask_num)
-        mask_bc = torch.ones_like(z_indices, dtype=torch.bool)
-        mask_bc[sorted_indices[:, :num_keep_tokens]] = False
+        last_value = confidence.topk(num_keep_tokens, dim=-1, largest=False).values[0, -1]
+        mask_bc = confidence <= last_value
         #At the end of the decoding process, add back the original token values that were not masked to the predicted tokens
         z_indices_predict=torch.where(mask, z_indices_predict, z_indices)
-        z_indices_predict = z_indices_predict.view(z_indices.shape[0], -1)
         return z_indices_predict, mask_bc
     
 __MODEL_TYPE__ = {

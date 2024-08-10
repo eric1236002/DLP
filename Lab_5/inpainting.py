@@ -55,7 +55,6 @@ class MaskGIT:
                 if step == self.sweet_spot:
                     break
                 ratio = step / self.total_iter #this should be updated 用於計算每次迭代要碼的比例
-                z_indices.to(device=self.device)
                 z_indices_predict, mask_bc = self.model.inpainting(ratio, z_indices, mask_b, mask_num)
 
                 #static method yon can modify or not, make sure your visualization results are correct
@@ -120,7 +119,7 @@ if __name__ == '__main__':
     
     
 #TODO3 step1-2: modify the path, MVTM parameters
-    parser.add_argument('--load-transformer-ckpt-path', type=str, default='D:\Cloud\DLP\Lab_5\checkpoints\\transformer_last.pt', help='load ckpt')
+    parser.add_argument('--load-transformer-ckpt-path', type=str, default='/home/pp037/DLP/Lab_5/checkpoints/transformer_last.pt', help='load ckpt')
     
     #dataset path
     parser.add_argument('--test-maskedimage-path', type=str, default='./cat_face/masked_image', help='Path to testing image dataset.')
