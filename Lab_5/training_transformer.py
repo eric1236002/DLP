@@ -48,7 +48,7 @@ class WarmupLinearLRSchedule:
 class TrainTransformer:
     def __init__(self, args, MaskGit_CONFIGS):
         self.model = VQGANTransformer(MaskGit_CONFIGS["model_param"]).to(device=args.device)
-        self.optim,self.scheduler = self.configure_optimizers()
+        self.optim,self.scheduler = self.configure_optimizers(args)
         self.prepare_training()
         self.args = args
         if self.args.start_from_epoch > 0:
@@ -69,7 +69,7 @@ class TrainTransformer:
                 logits, target  = self.model(image)
                 loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.view(-1))
                 loss.backward()
-                self.optim.step()   
+                self.optim.step()
                 self.optim.zero_grad()
                 step += 1
                 train_loss += loss.item()
@@ -90,11 +90,13 @@ class TrainTransformer:
                 val_loss += loss.item()
         return val_loss / len(val_loader)
 
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=args.learning_rate)
-        scheduler = scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
-        return optimizer,scheduler
-
+    def configure_optimizers(self,args):
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.learning_rate)
+        if args.lr_schedule == 'warmup':
+            scheduler = WarmupLinearLRSchedule(optimizer, 0.000001, args.learning_rate, 0, args.warmup_epochs, args.epochs,args.start_from_epoch)
+        else:
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
+        return optimizer,scheduler 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="MaskGIT")
@@ -105,8 +107,8 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda:0", help='Which device the training is on.')
     parser.add_argument('--num_workers', type=int, default=4, help='Number of worker')
     parser.add_argument('--batch-size', type=int, default=10, help='Batch size for training.')
-    parser.add_argument('--partial', type=float, default=0.005, help='Number of epochs to train (default: 50)')    
-    parser.add_argument('--accum-grad', type=int, default=10, help='Number for gradient accumulation.')
+    parser.add_argument('--partial', type=float, default=1.0, help='Number of epochs to train (default: 50)')    
+    parser.add_argument('--accum-grad', type=int, default=3, help='Number for gradient accumulation.')
 
     #you can modify the hyperparameters 
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train.')
@@ -114,11 +116,11 @@ if __name__ == '__main__':
     parser.add_argument('--save_root', type=str, default='./checkpoints/', help='Save CKPT root path')
     parser.add_argument('--start-from-epoch', type=int, default=0, help='Which epoch to start from.')
     parser.add_argument('--ckpt-interval', type=int, default=0, help='Number of epochs to train.')
-    parser.add_argument('--learning-rate', type=float, default=0.01, help='Learning rate.')
+    parser.add_argument('--learning-rate', type=float, default=0.001, help='Learning rate.')
     parser.add_argument('--warmup-epochs', type=int, default=10, help='Number of warmup epochs.')
     parser.add_argument('--wandb-run-name', type=str, default='transformer', help='Name of the wandb run.')
     parser.add_argument('--MaskGitConfig', type=str, default='config/MaskGit.yml', help='Configurations for TransformerVQGAN')
-
+    parser.add_argument('--lr_schedule', type=str, default='MultiStepLR', help='Learning rate schedule.')
     args = parser.parse_args()
     os.makedirs(args.save_root, exist_ok=True)
     MaskGit_CONFIGS = yaml.safe_load(open(args.MaskGitConfig, 'r'))
@@ -148,7 +150,7 @@ if __name__ == '__main__':
     best_val_loss = float('inf')
     best_val_loss_epoch = 0
     wandb.init(project="Lab5",
-               mode='disabled',
+            #    mode='disabled',
                config=vars(args),
                name=args.wandb_run_name,
                save_code=True)
@@ -168,11 +170,15 @@ if __name__ == '__main__':
             best_val_loss = val_loss
             best_val_loss_epoch = epoch
         print(f"Current Epoch {epoch}, train_loss: {train_loss}, val_loss: {val_loss}")
+        if args.lr_schedule == 'warmup':
+            lr=train_transformer.scheduler.lr
+        else:
+            lr=train_transformer.scheduler.get_last_lr()[0]
         wandb.log({
             "Train Loss": train_loss,
             "Valid Loss": val_loss,
             "Gamma": train_transformer.model.gamma(epoch / args.epochs),
-            "Learning Rate": train_transformer.scheduler.get_last_lr()[0]
+            "Learning Rate": lr
         })
     print(f"Best train loss epoch: {best_train_loss_epoch}-->{best_train_loss}, Best val loss epoch: {best_val_loss_epoch}-->{best_val_loss}")
     with open("loss.csv", "w") as f:
