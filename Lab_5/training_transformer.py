@@ -111,12 +111,12 @@ if __name__ == '__main__':
     parser.add_argument('--accum-grad', type=int, default=3, help='Number for gradient accumulation.')
 
     #you can modify the hyperparameters 
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train.')
+    parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train.')
     parser.add_argument('--save-per-epoch', type=int, default=1, help='Save CKPT per ** epochs(defcault: 1)')
     parser.add_argument('--save_root', type=str, default='./checkpoints/', help='Save CKPT root path')
     parser.add_argument('--start-from-epoch', type=int, default=0, help='Which epoch to start from.')
     parser.add_argument('--ckpt-interval', type=int, default=0, help='Number of epochs to train.')
-    parser.add_argument('--learning-rate', type=float, default=0.001, help='Learning rate.')
+    parser.add_argument('--learning-rate', type=float, default=0.0001, help='Learning rate.')
     parser.add_argument('--warmup-epochs', type=int, default=10, help='Number of warmup epochs.')
     parser.add_argument('--wandb-run-name', type=str, default='transformer', help='Name of the wandb run.')
     parser.add_argument('--MaskGitConfig', type=str, default='config/MaskGit.yml', help='Configurations for TransformerVQGAN')
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     train_loss_history = []
     val_loss_history = []
     wandb.init(project="Lab5",
-            #    mode='disabled',
+               mode='disabled',
                config=vars(args),
                name=args.wandb_run_name,
                save_code=True)

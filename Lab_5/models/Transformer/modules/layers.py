@@ -15,7 +15,7 @@ class MultiHeadAttention(nn.Module):
         self.wv = nn.Linear(dim, dim)
 
         self.dropout = nn.Dropout(p=attn_drop)
-        self.linear_out = nn.Linear(self.dim, self.dim)
+        self.o = nn.Linear(dim, dim)
 
 
     def forward(self, x):
@@ -28,15 +28,16 @@ class MultiHeadAttention(nn.Module):
         '''
         batch_size, num_image_tokens, dim = x.shape
         #線性變換
-        q = self.wq(x).view(batch_size, num_image_tokens, self.num_heads, self.head_dim).transpose(1, 2)
-        k = self.wk(x).view(batch_size, num_image_tokens, self.num_heads, self.head_dim).transpose(1, 2)
-        v = self.wv(x).view(batch_size, num_image_tokens, self.num_heads, self.head_dim).transpose(1, 2)
+        q = self.wq(x).reshape(batch_size, num_image_tokens, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        k = self.wk(x).reshape(batch_size, num_image_tokens, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        v = self.wv(x).reshape(batch_size, num_image_tokens, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         # softmax(QK^T / sqrt(d_k))
-        attn = q.matmul(k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        attn = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        attn = torch.nn.functional.softmax(attn, dim=-1)
         attn = self.dropout(attn)        
         #(batch_size, num_heads, seq_length, head_dim) -> (batch_size, seq_length, num_heads, head_dim)再恢復到形狀 (batch_size, seq_length, dim)
         out = torch.matmul(attn, v).permute(0, 2, 1, 3).reshape(batch_size, num_image_tokens, dim) 
-        out = self.linear_out(out)
+        out = self.o(out)
         return out
 
 class MLP(nn.Sequential):
