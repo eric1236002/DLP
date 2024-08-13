@@ -103,7 +103,7 @@ if __name__ == '__main__':
     #TODO2:check your dataset path is correct 
     parser.add_argument('--train_d_path', type=str, default="./cat_face/train/", help='Training Dataset Path')
     parser.add_argument('--val_d_path', type=str, default="./cat_face/val/", help='Validation Dataset Path')
-    parser.add_argument('--checkpoint-path', type=str, default='./checkpoints/last_ckpt.pt', help='Path to checkpoint.')
+    parser.add_argument('--checkpoint-path', type=str, default='/home/pp037/DLP/Lab_5/EXPERIMENT/checkpoints/transformer_last.pt', help='Path to checkpoint.')
     parser.add_argument('--device', type=str, default="cuda:0", help='Which device the training is on.')
     parser.add_argument('--num_workers', type=int, default=4, help='Number of worker')
     parser.add_argument('--batch-size', type=int, default=10, help='Batch size for training.')
@@ -111,7 +111,7 @@ if __name__ == '__main__':
     parser.add_argument('--accum-grad', type=int, default=3, help='Number for gradient accumulation.')
 
     #you can modify the hyperparameters 
-    parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train.')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train.')
     parser.add_argument('--save-per-epoch', type=int, default=1, help='Save CKPT per ** epochs(defcault: 1)')
     parser.add_argument('--save_root', type=str, default='./checkpoints/', help='Save CKPT root path')
     parser.add_argument('--start-from-epoch', type=int, default=0, help='Which epoch to start from.')
@@ -145,10 +145,6 @@ if __name__ == '__main__':
 #TODO2 step1-5:    
     train_loss_history = []
     val_loss_history = []
-    best_train_loss = float('inf')
-    best_train_loss_epoch = 0
-    best_val_loss = float('inf')
-    best_val_loss_epoch = 0
     wandb.init(project="Lab5",
             #    mode='disabled',
                config=vars(args),
@@ -163,12 +159,6 @@ if __name__ == '__main__':
             torch.save(train_transformer.model.transformer.state_dict(), os.path.join(args.save_root, f"transformer_epoch_{epoch}.pt"))
         torch.save(train_transformer.model.transformer.state_dict(), os.path.join(args.save_root, "transformer_last.pt"))
         train_transformer.scheduler.step()
-        if train_loss < best_train_loss:
-            best_train_loss = train_loss
-            best_train_loss_epoch = epoch
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_val_loss_epoch = epoch
         print(f"Current Epoch {epoch}, train_loss: {train_loss}, val_loss: {val_loss}")
         if args.lr_schedule == 'warmup':
             lr=train_transformer.scheduler.lr
@@ -177,10 +167,8 @@ if __name__ == '__main__':
         wandb.log({
             "Train Loss": train_loss,
             "Valid Loss": val_loss,
-            "Gamma": train_transformer.model.gamma(epoch / args.epochs),
             "Learning Rate": lr
         })
-    print(f"Best train loss epoch: {best_train_loss_epoch}-->{best_train_loss}, Best val loss epoch: {best_val_loss_epoch}-->{best_val_loss}")
     with open("loss.csv", "w") as f:
         f.write("train_loss,val_loss\n")
         for train_loss, val_loss in zip(train_loss_history, val_loss_history):
