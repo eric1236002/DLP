@@ -127,13 +127,14 @@ class Test_model(VAE_Model):
         for i in range(1,630):
             frame_feature = self.frame_transformation(pre_img)
             label_feature = self.label_transformation(label[i])
-            # Gaussian predictor
-            z, mu, logvar = self.Gaussian_Predictor(frame_feature, label_feature)
+            # 
+            z= torch.randn(1, self.args.N_dim, self.args.frame_H, self.args.frame_W).to(self.args.device)
 
             # decode fusion
             decoded = self.Decoder_Fusion(frame_feature, label_feature, z)
             
             generated = self.Generator(decoded)
+            pre_img=generated
             decoded_frame_list.append(generated.cpu())
             label_list.append(label[i].cpu())
         
@@ -186,7 +187,9 @@ def main(args):
     model.load_checkpoint()
     model.eval()
 
+    pytorch_total_params = sum(p.numel() for p in model.parameters())
 
+    print(f"number of params: {pytorch_total_params}")
 
 
 
@@ -200,8 +203,8 @@ if __name__ == '__main__':
     parser.add_argument('--no_sanity',     action='store_true')
     parser.add_argument('--test',          action='store_true')
     parser.add_argument('--make_gif',      action='store_true')
-    parser.add_argument('--DR',            type=str, required=True,  help="Your Dataset Path")
-    parser.add_argument('--save_root',     type=str, required=True,  help="The path to save your data")
+    parser.add_argument('--DR',            type=str,  help="Your Dataset Path",default='/home/pp037/DLP/Lab_4/LAB4_Dataset')
+    parser.add_argument('--save_root',     type=str,  help="The path to save your data",default='/home/pp037/DLP/Lab_4/demo')
     parser.add_argument('--num_workers',   type=int, default=4)
     parser.add_argument('--num_epoch',     type=int, default=70,     help="number of total epoch")
     parser.add_argument('--per_save',      type=int, default=3,      help="Save checkpoint every seted epoch")
@@ -222,7 +225,7 @@ if __name__ == '__main__':
     parser.add_argument('--tfr',           type=float, default=1.0,  help="The initial teacher forcing ratio")
     parser.add_argument('--tfr_sde',       type=int,   default=10,   help="The epoch that teacher forcing ratio start to decay")
     parser.add_argument('--tfr_d_step',    type=float, default=0.1,  help="Decay step that teacher forcing ratio adopted")
-    parser.add_argument('--ckpt_path',     type=str,    default=None,help="The path of your checkpoints")   
+    parser.add_argument('--ckpt_path',     type=str,default='/home/pp037/DLP/Lab_4/old/epoch=99.ckpt',help="The path of your checkpoints")   
     
     # Training Strategy
     parser.add_argument('--fast_train',         action='store_true')

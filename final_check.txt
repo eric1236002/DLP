@@ -12,4 +12,6 @@ python inference.py --model D:\Cloud\DLP\Lab_3\saved_models\DL_Lab3_UNet_3135510
 python inference.py --model D:\Cloud\DLP\Lab_3\saved_models\DL_Lab3_ResNet34_UNet_313551087_殷暐智.pth --data_path D:\Cloud\DLP\Lab_3\dataset\oxford-iiit-pet
 
 
-python3 Tester.py --DR /home/pp037/DLP/Lab_4/LAB4_Dataset --save_root /home/pp037/DLP/Lab_4/old/demo --ckpt_path /home/pp037/DLP/Lab_4/old/epoch=99.ckpt
+python3 Tester.py --DR /home/pp037/DLP/Lab_4/LAB4_Dataset --save_root /home/pp037/DLP/Lab_4/demo --ckpt_path /home/pp037/DLP/Lab_4/old/epoch=99.ckpt
+
+python demo.py --gt_path /home/pp037/DLP/Lab_4/Lab4_template/gt.csv --submission_path /home/pp037/DLP/Lab_4/demo/submission.csv 

@@ -210,7 +210,7 @@ class VAE_Model(nn.Module):
             decoded = self.Decoder_Fusion(frame_feature, label_feature, z)
             
             generated = self.Generator(decoded)
-            
+            first_img=generated
             #reconstruction loss
             recon_loss = self.mse_criterion(generated, img[:,i])
             recon_loss_sum += recon_loss
@@ -248,6 +248,7 @@ class VAE_Model(nn.Module):
             decoded = self.Decoder_Fusion(frame_feature, label_feature, z)
             
             generated = self.Generator(decoded)
+            pre_img=generated
             image_list.append(generated)
             #reconstruction loss
             recon_loss = self.mse_criterion(generated, img[:,i])
