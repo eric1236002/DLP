@@ -245,7 +245,7 @@ class VAE_Model(nn.Module):
             z, mu, logvar = self.Gaussian_Predictor(frame_feature, label_feature)
 
             # decode fusion
-            decoded = self.Decoder_Fusion(frame_feature, label_feature, z)
+            decoded = torch.randn(1, self.args.N_dim, self.args.frame_H, self.args.frame_W).to(self.args.device)
             
             generated = self.Generator(decoded)
             pre_img=generated
