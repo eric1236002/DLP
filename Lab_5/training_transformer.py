@@ -12,38 +12,7 @@ import yaml
 from torch.utils.data import DataLoader
 import wandb
 
-class WarmupLinearLRSchedule:
-    """
-    Implements Warmup learning rate schedule until 'warmup_steps', going from 'init_lr' to 'peak_lr' for multiple optimizers.
-    """
-    def __init__(self, optimizer, init_lr, peak_lr, end_lr, warmup_epochs, epochs=100, current_step=0):
-        self.init_lr = init_lr
-        self.peak_lr = peak_lr
-        self.optimizer = optimizer
-        self.warmup_rate = (peak_lr - init_lr) / warmup_epochs
-        self.decay_rate = (end_lr - peak_lr) / (epochs - warmup_epochs)
-        self.update_steps = current_step
-        self.lr = init_lr
-        self.warmup_steps = warmup_epochs
-        self.epochs = epochs
-        if current_step > 0:
-            self.lr = self.peak_lr + self.decay_rate * (current_step - 1 - warmup_epochs)
 
-    def set_lr(self, lr):
-        print(f"Setting lr: {lr}")
-        for g in self.optimizer.param_groups:
-            g['lr'] = lr
-
-    def step(self):
-        if self.update_steps <= self.warmup_steps:
-            lr = self.init_lr + self.warmup_rate * self.update_steps
-        # elif self.warmup_steps < self.update_steps <= self.epochs:
-        else:
-            lr = max(0., self.lr + self.decay_rate)
-        self.set_lr(lr)
-        self.lr = lr
-        self.update_steps += 1
-        return self.lr
 #TODO2 step1-4: design the transformer training strategy
 class TrainTransformer:
     def __init__(self, args, MaskGit_CONFIGS):
@@ -92,9 +61,7 @@ class TrainTransformer:
 
     def configure_optimizers(self,args):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.learning_rate)
-        if args.lr_schedule == 'warmup':
-            scheduler = WarmupLinearLRSchedule(optimizer, 0.000001, args.learning_rate, 0, args.warmup_epochs, args.epochs,args.start_from_epoch)
-        else:
+        if args.lr_schedule == 'MultiStepLR':
             scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
         return optimizer,scheduler 
 
@@ -117,7 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--start-from-epoch', type=int, default=0, help='Which epoch to start from.')
     parser.add_argument('--ckpt-interval', type=int, default=0, help='Number of epochs to train.')
     parser.add_argument('--learning-rate', type=float, default=0.0001, help='Learning rate.')
-    parser.add_argument('--warmup-epochs', type=int, default=10, help='Number of warmup epochs.')
+
     parser.add_argument('--wandb-run-name', type=str, default='transformer', help='Name of the wandb run.')
     parser.add_argument('--MaskGitConfig', type=str, default='config/MaskGit.yml', help='Configurations for TransformerVQGAN')
     parser.add_argument('--lr_schedule', type=str, default='MultiStepLR', help='Learning rate schedule.')
@@ -146,7 +113,7 @@ if __name__ == '__main__':
     train_loss_history = []
     val_loss_history = []
     wandb.init(project="Lab5",
-               mode='disabled',
+            #    mode='disabled',
                config=vars(args),
                name=args.wandb_run_name,
                save_code=True)
