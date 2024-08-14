@@ -24,6 +24,7 @@ HW3/
 *.tmp
 *.txt
 *.ckpt
+*.pt
 *.gif
 demo/
 checkpoint*/

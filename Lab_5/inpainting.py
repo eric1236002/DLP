@@ -26,9 +26,9 @@ class MaskGIT:
 
     @staticmethod
     def prepare(args):
-        os.makedirs("test_results_"+args.mask_func, exist_ok=True)
-        os.makedirs("mask_scheduling_"+args.mask_func, exist_ok=True)
-        os.makedirs("imga_"+args.mask_func, exist_ok=True)
+        os.makedirs("results/test_results_"+args.mask_func, exist_ok=True)
+        os.makedirs("results/mask_scheduling_"+args.mask_func, exist_ok=True)
+        os.makedirs("results/imga_"+args.mask_func, exist_ok=True)
 
 ##TODO3 step1-1: total iteration decoding  
 #mask_b: iteration decoding initial mask, where mask_b is true means mask
@@ -56,7 +56,7 @@ class MaskGIT:
                 if step == self.sweet_spot:
                     break
                 ratio = step / self.total_iter #this should be updated 用於計算每次迭代要碼的比例
-                z_indices_predict, mask_bc = self.model.inpainting(ratio, z_indices, mask_b, mask_num,self.mask_func)
+                z_indices_predict, mask_bc = self.model.inpainting(ratio,z_indices_predict, mask_bc,  mask_num, self.mask_func)
 
                 #static method yon can modify or not, make sure your visualization results are correct
                 mask_i=mask_bc.view(1, 16, 16)
@@ -72,11 +72,11 @@ class MaskGIT:
                 imga[step+1]=dec_img_ori #get decoded image
 
             ##decoded image of the sweet spot only, the test_results folder path will be the --predicted-path for fid score calculation
-            vutils.save_image(dec_img_ori, os.path.join("test_results_"+self.args.mask_func, f"image_{i:03d}.png"), nrow=1) 
+            vutils.save_image(dec_img_ori, os.path.join("results/test_results_"+self.args.mask_func, f"image_{i:03d}.png"), nrow=1) 
 
             #demo score 
-            vutils.save_image(maska, os.path.join("mask_scheduling_"+self.args.mask_func, f"test_{i}.png"), nrow=10) 
-            vutils.save_image(imga, os.path.join("imga_"+self.args.mask_func, f"test_{i}.png"), nrow=7)
+            vutils.save_image(maska, os.path.join("results/mask_scheduling_"+self.args.mask_func, f"test_{i}.png"), nrow=10) 
+            vutils.save_image(imga, os.path.join("results/imga_"+self.args.mask_func, f"test_{i}.png"), nrow=7)
 
 
 
