@@ -178,6 +178,8 @@ class VAE_Model(nn.Module):
             img = img.to(self.args.device)
             label = label.to(self.args.device)
             loss, psnr_list, avg_psnr = self.val_one_step(img, label)
+            if loss =="nan":
+                break
             all_psnr.extend(psnr_list)
             self.avg_psnr.append(avg_psnr)
             self.tqdm_bar('val', pbar, loss.detach().cpu(), lr=self.scheduler.get_last_lr()[0])
@@ -242,10 +244,10 @@ class VAE_Model(nn.Module):
             label_feature = self.label_transformation(label[:,i])
 
             # Gaussian predictor
-            z, mu, logvar = self.Gaussian_Predictor(frame_feature, label_feature)
+            z= torch.randn(1, self.args.N_dim, self.args.frame_H, self.args.frame_W).to(self.args.device)
 
             # decode fusion
-            decoded = torch.randn(1, self.args.N_dim, self.args.frame_H, self.args.frame_W).to(self.args.device)
+            decoded = self.Decoder_Fusion(frame_feature, label_feature, z)
             
             generated = self.Generator(decoded)
             pre_img=generated
@@ -253,10 +255,7 @@ class VAE_Model(nn.Module):
             #reconstruction loss
             recon_loss = self.mse_criterion(generated, img[:,i])
 
-            #kl divergence loss
-            kl_loss = kl_criterion(mu, logvar, img.size(0))
-
-            loss += recon_loss + kl_loss
+            loss += recon_loss 
         psnr_list, avg_psnr = Caluate_PSNR(img[0], image_list)
         loss /= (self.val_vi_len - 1)
         return loss, psnr_list, avg_psnr
