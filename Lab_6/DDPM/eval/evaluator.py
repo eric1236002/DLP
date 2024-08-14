@@ -35,9 +35,9 @@ transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
 
 class evaluation_model():
-    def __init__(self):
+    def __init__(self,path):
         #modify the path to your own path
-        checkpoint = torch.load('./checkpoint.pth')
+        checkpoint = torch.load(path+'/checkpoint.pth',weights_only=True)
         self.resnet18 = models.resnet18(pretrained=False)
         self.resnet18.fc = nn.Sequential(
             nn.Linear(512,24),
