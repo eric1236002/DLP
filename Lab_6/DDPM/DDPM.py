@@ -11,6 +11,7 @@ from eval.evaluator import evaluation_model
 from PIL import Image
 import torchvision.utils as vutils
 import matplotlib.pyplot as plt
+import wandb
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f'Using device: {device}')
 
@@ -33,25 +34,47 @@ class CDDPM():
         os.makedirs(os.path.join(self.save_path, 'images'), exist_ok=True)
 
     def save_model(self,epoch):
-        model_save_path = os.path.join(self.save_path, 'model', f'{self.args.model}_{str(epoch)}.pth')
-        torch.save(self.net.state_dict(), model_save_path)
-        print(f"Model saved at {model_save_path}")
+        
+        # 創建一個包含所有要保存的狀態的字典
+        checkpoint = {
+            'model_state_dict': self.net.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict()
+        }
+        
+        # 定義保存路徑
+        save_path = os.path.join(self.save_path, 'model', f'{self.args.model}_checkpoint_{epoch}.pth')
+        
+        # 保存整個字典
+        torch.save(checkpoint, save_path)
+        
+        print(f"model saved at {save_path}")
 
     def load_model(self):
         if self.args.load_ckpt:
-            self.net.load_state_dict(torch.load(self.args.load_ckpt))
-            print(f"Loaded model from {self.args.load_ckpt}")
+            try:
+                checkpoint = torch.load(self.args.load_ckpt, map_location=device)
+                self.net.load_state_dict(checkpoint['model_state_dict'])
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                
+                print(f"load model from {self.args.load_ckpt} start training from epoch {self.args.start_epoch}")
+
+            except Exception as e:
+                print(f"load checkpoint error: {e}")
+                print("start training from epoch 0")
+        else:
+            print("no checkpoint file, start training from epoch 0")
 
     def train(self):
         loss_save = []
-        for epoch in range(self.args.epochs):
+        for epoch in range(self.args.start_epoch, self.args.epochs):
             loss_temp = 0
             for x, y in tqdm(self.dataload):
                 x = x.to(device)
                 y = y.to(device)
                 noise = torch.randn(x.shape).to(device)
-                bs = x.shape[0]
-                timestamp = torch.randint(0, self.args.timesteps, (bs,), device=device).long()
+                timestamp = torch.randint(0, self.args.timesteps, (x.shape[0],), device=device).long()
                 noise_x = self.noise_scheduler.add_noise(x, noise, timestamp)
                 perd_noise = self.net(noise_x, timestamp, y)
 
@@ -66,10 +89,14 @@ class CDDPM():
 
             if (epoch + 1) % self.args.save_per == 0:
                 self.save_model(epoch)
-                # print(f'Epoch {epoch+1}/{self.args.epochs}, Loss: {loss_temp/len(self.dataload)}')
-            
+            if (epoch + 1) % self.args.test_per == 0:
+                test_acc = self.eval('test')
+                new_test_acc = self.eval('new_test')
+                print(f'Epoch {epoch+1}/{self.args.epochs}, Accuracy: {test_acc}, {new_test_acc}')
+                wandb.log({'test_acc': test_acc, 'new_test_acc': new_test_acc})
             loss_save.append(loss_temp / len(self.dataload))
             print(f'Epoch {epoch+1}/{self.args.epochs}, Loss: {loss_save[-1]}')
+            wandb.log({'loss': loss_save[-1]})
 
     @torch.no_grad()
     def eval(self, mode='test'):
@@ -89,7 +116,7 @@ class CDDPM():
             # 保存去噪過程
             denoising_process = [images.cpu()]
             
-            for j, t in enumerate(self.noise_scheduler.timesteps):
+            for j, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
                 pred = self.net(images, t, label)
                 images = self.noise_scheduler.step(pred, t, images).prev_sample
                 
@@ -134,9 +161,9 @@ def main(args):
         os.makedirs(args.save_path)
  
     if args.mode == 'train':
+        if args.start_epoch > 0:
+            cddpm.load_model()
         cddpm.train()
-        test_acc = cddpm.eval('test')
-        new_test_acc = cddpm.eval('new_test')
     elif args.mode == 'test':
         cddpm.load_model()
         test_acc = cddpm.eval('test')
@@ -154,9 +181,17 @@ if __name__ == '__main__':
     parser.add_argument('--partial', type=float, default=1.0, help='partial') 
     parser.add_argument('--mode', type=str, default='train', help='train or test')
     parser.add_argument('--save_path', type=str, default='/home/pp037/DLP/Lab_6/DDPM/', help='save checkpoint path')
-    parser.add_argument('--load_ckpt', type=str, default='/home/pp037/DLP/Lab_6/DDPM/', help='load checkpoint path')
-    parser.add_argument('--save_per', type=int, default=10, help='save model every n epochs')
+    parser.add_argument('--load_ckpt', type=str, default='/home/pp037/DLP/Lab_6/DDPM/model/unet_checkpoint_3.pth', help='load checkpoint path')
+    parser.add_argument('--save_per', type=int, default=2, help='save model every n epochs')
+    parser.add_argument('--test_per', type=int, default=20, help='test model every n epochs')
+    parser.add_argument('--start_epoch', type=int, default=0, help='start epoch')
     parser.add_argument('--timesteps', type=int, default=1000, help='timesteps')
+    parser.add_argument('--wandb_run_name', type=str, default='unet', help='wandb run name')
 
     args = parser.parse_args()
+    wandb.init(project="DDPM",
+        #    mode='disabled',
+            config=vars(args),
+            name=args.wandb_run_name,
+            save_code=True)
     main(args)
