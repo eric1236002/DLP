@@ -13,18 +13,22 @@ class Unet(nn.Module):
             out_channels=3,
             time_embedding_type="positional",
             layers_per_block=2,
-            block_out_channels=(64, 128, 128, 256),  # More channels -> more parameters
+            block_out_channels=(64, 128, 128, 256, 256,512),  # More channels -> more parameters
             down_block_types=(
-                "DownBlock2D",  # a regular ResNet downsampling block
+                "DownBlock2D", # a regular ResNet downsampling block
                 "DownBlock2D",
-                "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
-                "AttnDownBlock2D",
+                "DownBlock2D",
+                "DownBlock2D",
+                "AttnDownBlock2D", # a ResNet downsampling block with spatial self-attention
+                "DownBlock2D",
             ),
             up_block_types=(
-                "AttnUpBlock2D",
-                "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
+                "UpBlock2D", # a regular ResNet upsampling block
+                "AttnUpBlock2D", # a ResNet upsampling block with spatial self-attention
                 "UpBlock2D",
-                "UpBlock2D",  # a regular ResNet upsampling block
+                "UpBlock2D",
+                "UpBlock2D",
+                "UpBlock2D",
             ),
         )
     def forward(self, x, t, label):

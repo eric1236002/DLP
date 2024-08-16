@@ -28,6 +28,7 @@ class CDDPM():
         self.evaluator = evaluation_model(path=args.dataset_path)
         self.num_classes = 24
         self.save_path = args.save_path
+        self.current_epoch = args.start_epoch
 
         # Ensure save directory exists
         os.makedirs(os.path.join(self.save_path, 'model'), exist_ok=True)
@@ -69,8 +70,13 @@ class CDDPM():
     def train(self):
         loss_save = []
         for epoch in range(self.args.start_epoch, self.args.epochs):
+            if epoch < self.args.fast_train_epoch:
+                dataset=self.dataload
+            else:
+                dataset=DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode=self.args.mode, partial=0.5), 
+                                   batch_size=self.args.batch_size, shuffle=True)
             loss_temp = 0
-            for x, y in tqdm(self.dataload):
+            for x, y in tqdm(dataset):
                 x = x.to(device)
                 y = y.to(device)
                 noise = torch.randn(x.shape).to(device)
@@ -78,9 +84,9 @@ class CDDPM():
                 noise_x = self.noise_scheduler.add_noise(x, noise, timestamp)
                 perd_noise = self.net(noise_x, timestamp, y)
 
-
-                loss = self.loss_fn(perd_noise, x)
-                loss.backward()
+                if epoch % self.args.gradient_accumulation_steps == 0:
+                    loss = self.loss_fn(perd_noise, x)
+                    loss.backward()
                 
                 self.optimizer.step()
                 self.optimizer.zero_grad()
@@ -94,24 +100,26 @@ class CDDPM():
                 new_test_acc = self.eval('new_test')
                 print(f'Epoch {epoch+1}/{self.args.epochs}, Accuracy: {test_acc}, {new_test_acc}')
                 wandb.log({'test_acc': test_acc, 'new_test_acc': new_test_acc})
-            loss_save.append(loss_temp / len(self.dataload))
+            self.save_model('last')
+            loss_save.append(loss_temp / len(dataset))
             print(f'Epoch {epoch+1}/{self.args.epochs}, Loss: {loss_save[-1]}')
             wandb.log({'loss': loss_save[-1]})
+            self.current_epoch = epoch
 
     @torch.no_grad()
     def eval(self, mode='test'):
         if mode == 'test':
             dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='test'), 
-                                  batch_size=self.args.batch_size, shuffle=False)
+                                  batch_size=32, shuffle=False)
         elif mode == 'new_test':
             dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='new_test'), 
-                                  batch_size=self.args.batch_size, shuffle=False)
+                                  batch_size=32, shuffle=False)
         
         acc_temp = 0
         num_images = 0
         for label in dataload:
             label = label.to(device)
-            images = torch.randn(self.args.batch_size, 3, 64, 64).to(device)
+            images = torch.randn(32, 3, 64, 64).to(device)
             
             # 保存去噪過程
             denoising_process = [images.cpu()]
@@ -123,13 +131,12 @@ class CDDPM():
                 if j % (len(self.noise_scheduler.timesteps) // 8) == 0:
                     denoising_process.append(images.cpu())
             
-            # 使用 make_grid 生成網格
-            image_grid = vutils.make_grid(images.cpu(), nrow=8, normalize=True, padding=2)
+                # 使用 make_grid 生成網格
+                image_grid = vutils.make_grid(images.cpu(), nrow=8, normalize=True, padding=2)
+                # 保存圖像
+                vutils.save_image(image_grid, os.path.join(self.args.save_path, 'images', f'{mode}_{num_images}_{self.current_epoch}.png'))
             denoising_grid = vutils.make_grid(torch.cat(denoising_process), nrow=8, normalize=True, padding=2)
-            
-            # 保存圖像
-            vutils.save_image(image_grid, os.path.join(self.args.save_path, 'images', f'{mode}_{num_images}.png'))
-            vutils.save_image(denoising_grid, os.path.join(self.args.save_path, 'images', f'{mode}_denoising_{num_images}.png'))
+            vutils.save_image(denoising_grid, os.path.join(self.args.save_path, 'images', f'{mode}_denoising_{num_images}_{self.current_epoch}.png'))
             
             acc = self.evaluator.eval(images, label)
             acc_temp += acc
@@ -138,9 +145,6 @@ class CDDPM():
         print(f'Accuracy: {acc_temp/len(dataload)}')
         return acc_temp / len(dataload)
 
-    def generated_images(self):
-        images = torch.randn(self.args.batch_size, 3, 64, 64).to(device)
-        return images
 
 
 def main(args):
@@ -161,6 +165,11 @@ def main(args):
         os.makedirs(args.save_path)
  
     if args.mode == 'train':
+        wandb.init(project="DDPM",
+        #    mode='disabled',
+            config=vars(args),
+            name=args.wandb_run_name,
+            save_code=True)
         if args.start_epoch > 0:
             cddpm.load_model()
         cddpm.train()
@@ -168,7 +177,7 @@ def main(args):
         cddpm.load_model()
         test_acc = cddpm.eval('test')
         new_test_acc = cddpm.eval('new_test')
-    print(f'Test Acc: {test_acc}, New Test Acc: {new_test_acc}')
+        print(f'Test Acc: {test_acc}, New Test Acc: {new_test_acc}')
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='unet', help='unet or resnet34_unet')
@@ -181,17 +190,14 @@ if __name__ == '__main__':
     parser.add_argument('--partial', type=float, default=1.0, help='partial') 
     parser.add_argument('--mode', type=str, default='train', help='train or test')
     parser.add_argument('--save_path', type=str, default='/home/pp037/DLP/Lab_6/DDPM/', help='save checkpoint path')
-    parser.add_argument('--load_ckpt', type=str, default='/home/pp037/DLP/Lab_6/DDPM/model/unet_checkpoint_3.pth', help='load checkpoint path')
-    parser.add_argument('--save_per', type=int, default=2, help='save model every n epochs')
-    parser.add_argument('--test_per', type=int, default=20, help='test model every n epochs')
+    parser.add_argument('--load_ckpt', type=str, default='/home/pp037/DLP/Lab_6/DDPM/model/unet_checkpoint_last.pth', help='load checkpoint path')
+    parser.add_argument('--save_per', type=int, default=5, help='save model every n epochs')
+    parser.add_argument('--test_per', type=int, default=10, help='test model every n epochs')
     parser.add_argument('--start_epoch', type=int, default=0, help='start epoch')
     parser.add_argument('--timesteps', type=int, default=1000, help='timesteps')
-    parser.add_argument('--wandb_run_name', type=str, default='unet', help='wandb run name')
+    parser.add_argument('--wandb_run_name', type=str, default='unet2', help='wandb run name')
+    parser.add_argument('--fast_train_epoch', type=int, default=5, help='fast train epoch')
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=1, help='gradient accumulation steps')
 
     args = parser.parse_args()
-    wandb.init(project="DDPM",
-        #    mode='disabled',
-            config=vars(args),
-            name=args.wandb_run_name,
-            save_code=True)
     main(args)
