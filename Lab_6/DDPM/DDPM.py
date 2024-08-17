@@ -70,7 +70,7 @@ class CDDPM():
     def train(self):
         loss_save = []
         for epoch in range(self.args.start_epoch, self.args.epochs):
-            if epoch < self.args.fast_train_epoch:
+            if epoch > self.args.fast_train_epoch:
                 dataset=self.dataload
             else:
                 dataset=DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode=self.args.mode, partial=0.5), 
@@ -106,26 +106,27 @@ class CDDPM():
             wandb.log({'loss': loss_save[-1]})
             self.current_epoch = epoch
 
-    @torch.no_grad()
+
     def eval(self, mode='test'):
         if mode == 'test':
             dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='test'), 
-                                  batch_size=32, shuffle=False)
+                                  batch_size=self.args.batch_size, shuffle=False)
         elif mode == 'new_test':
             dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='new_test'), 
-                                  batch_size=32, shuffle=False)
+                                  batch_size=self.args.batch_size, shuffle=False)
         
         acc_temp = 0
         num_images = 0
         for label in dataload:
             label = label.to(device)
-            images = torch.randn(32, 3, 64, 64).to(device)
+            images = torch.randn(self.args.batch_size, 3, 64, 64).to(device)
             
             # 保存去噪過程
             denoising_process = [images.cpu()]
             
             for j, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
-                pred = self.net(images, t, label)
+                with torch.no_grad():
+                    pred = self.net(images, t, label)
                 images = self.noise_scheduler.step(pred, t, images).prev_sample
                 
                 if j % (len(self.noise_scheduler.timesteps) // 8) == 0:
@@ -181,7 +182,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='unet', help='unet or resnet34_unet')
-    parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
+    parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--step_size', type=int, default=10, help='step size')
@@ -192,10 +193,10 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', type=str, default='/home/pp037/DLP/Lab_6/DDPM/', help='save checkpoint path')
     parser.add_argument('--load_ckpt', type=str, default='/home/pp037/DLP/Lab_6/DDPM/model/unet_checkpoint_last.pth', help='load checkpoint path')
     parser.add_argument('--save_per', type=int, default=5, help='save model every n epochs')
-    parser.add_argument('--test_per', type=int, default=10, help='test model every n epochs')
+    parser.add_argument('--test_per', type=int, default=5, help='test model every n epochs')
     parser.add_argument('--start_epoch', type=int, default=0, help='start epoch')
     parser.add_argument('--timesteps', type=int, default=1000, help='timesteps')
-    parser.add_argument('--wandb_run_name', type=str, default='unet2', help='wandb run name')
+    parser.add_argument('--wandb_run_name', type=str, default='unet3', help='wandb run name')
     parser.add_argument('--fast_train_epoch', type=int, default=5, help='fast train epoch')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1, help='gradient accumulation steps')
 
