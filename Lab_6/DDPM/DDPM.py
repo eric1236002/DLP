@@ -79,15 +79,15 @@ class CDDPM():
             for x, y in tqdm(dataset):
                 x = x.to(device)
                 y = y.to(device)
-                noise = torch.randn(x.shape).to(device)
-                timestamp = torch.randint(0, self.args.timesteps, (x.shape[0],), device=device).long()
+                noise = torch.randn_like(x)
+                timestamp = torch.randint(0, self.args.timesteps-1, (x.shape[0],), device=device).long()
                 noise_x = self.noise_scheduler.add_noise(x, noise, timestamp)
                 perd_noise = self.net(noise_x, timestamp, y)
 
                 if epoch % self.args.gradient_accumulation_steps == 0:
-                    loss = self.loss_fn(perd_noise, x)
+                    loss = self.loss_fn(perd_noise, noise)
                     loss.backward()
-                
+                nn.utils.clip_grad_value_(self.net.parameters(), 1.0)
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
@@ -110,36 +110,38 @@ class CDDPM():
     def eval(self, mode='test'):
         if mode == 'test':
             dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='test'), 
-                                  batch_size=self.args.batch_size, shuffle=False)
+                                  batch_size=32, shuffle=False)
         elif mode == 'new_test':
             dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='new_test'), 
-                                  batch_size=self.args.batch_size, shuffle=False)
+                                  batch_size=32, shuffle=False)
         
         acc_temp = 0
         num_images = 0
         for label in dataload:
             label = label.to(device)
-            images = torch.randn(self.args.batch_size, 3, 64, 64).to(device)
+            images = torch.randn(32, 3, 64, 64).to(device)
             
             # 保存去噪過程
-            denoising_process = [images.cpu()]
+            denoising_process = []
             
             for j, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
                 with torch.no_grad():
                     pred = self.net(images, t, label)
                 images = self.noise_scheduler.step(pred, t, images).prev_sample
+                denormalized = (images.detach() / 2 + 0.5).clamp(0, 1)
                 
-                if j % (len(self.noise_scheduler.timesteps) // 8) == 0:
-                    denoising_process.append(images.cpu())
+                if (j % (self.args.timesteps // 8) == 0 and j!=0) or j==self.args.timesteps-1:
+                    print(f"save image at {j} iter")
+                    denoising_process.append(denormalized[0].cpu())
             
                 # 使用 make_grid 生成網格
-                image_grid = vutils.make_grid(images.cpu(), nrow=8, normalize=True, padding=2)
+                image_grid = vutils.make_grid(denormalized.cpu(), nrow=8, normalize=True, padding=2)
                 # 保存圖像
                 vutils.save_image(image_grid, os.path.join(self.args.save_path, 'images', f'{mode}_{num_images}_{self.current_epoch}.png'))
-            denoising_grid = vutils.make_grid(torch.cat(denoising_process), nrow=8, normalize=True, padding=2)
+            denoising_grid = vutils.make_grid(torch.stack(denoising_process), nrow=8, normalize=True, padding=2)
             vutils.save_image(denoising_grid, os.path.join(self.args.save_path, 'images', f'{mode}_denoising_{num_images}_{self.current_epoch}.png'))
             
-            acc = self.evaluator.eval(images, label)
+            acc = self.evaluator.eval(images.to(device), label)
             acc_temp += acc
             num_images += 1
 
@@ -184,7 +186,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='unet', help='unet or resnet34_unet')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
-    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+    parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
     parser.add_argument('--step_size', type=int, default=10, help='step size')
     parser.add_argument('--gamma', type=float, default=0.1, help='gamma')
     parser.add_argument('--dataset_path', type=str, default='/home/pp037/DLP/Lab_6/DDPM/eval/', help='dataset path')
@@ -193,7 +195,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', type=str, default='/home/pp037/DLP/Lab_6/DDPM/', help='save checkpoint path')
     parser.add_argument('--load_ckpt', type=str, default='/home/pp037/DLP/Lab_6/DDPM/model/unet_checkpoint_last.pth', help='load checkpoint path')
     parser.add_argument('--save_per', type=int, default=5, help='save model every n epochs')
-    parser.add_argument('--test_per', type=int, default=5, help='test model every n epochs')
+    parser.add_argument('--test_per', type=int, default=10, help='test model every n epochs')
     parser.add_argument('--start_epoch', type=int, default=0, help='start epoch')
     parser.add_argument('--timesteps', type=int, default=1000, help='timesteps')
     parser.add_argument('--wandb_run_name', type=str, default='unet3', help='wandb run name')
