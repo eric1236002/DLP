@@ -108,6 +108,10 @@ class CDDPM():
 
 
     def eval(self, mode='test'):
+        torch.manual_seed(42)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(42)
+
         if mode == 'test':
             dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='test'), 
                                   batch_size=32, shuffle=False)
@@ -121,7 +125,6 @@ class CDDPM():
             label = label.to(device)
             images = torch.randn(32, 3, 64, 64).to(device)
             
-            # 保存去噪過程
             denoising_process = []
             
             for j, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
@@ -134,12 +137,10 @@ class CDDPM():
                     print(f"save image at {j} iter")
                     denoising_process.append(denormalized[0].cpu())
             
-                # 使用 make_grid 生成網格
-                image_grid = vutils.make_grid(denormalized.cpu(), nrow=8, normalize=True, padding=2)
-                # 保存圖像
-                vutils.save_image(image_grid, os.path.join(self.args.save_path, 'images', f'{mode}_{num_images}_{self.current_epoch}.png'))
-            denoising_grid = vutils.make_grid(torch.stack(denoising_process), nrow=8, normalize=True, padding=2)
-            vutils.save_image(denoising_grid, os.path.join(self.args.save_path, 'images', f'{mode}_denoising_{num_images}_{self.current_epoch}.png'))
+            image_grid = vutils.make_grid(denormalized.cpu(), nrow=8, normalize=True, padding=2)
+            vutils.save_image(image_grid, os.path.join(self.args.save_path, 'images', f'{mode}_{num_images}_{self.current_epoch}.png'))
+            # denoising_grid = vutils.make_grid(torch.stack(denoising_process), nrow=8, normalize=True, padding=2)
+            # vutils.save_image(denoising_grid, os.path.join(self.args.save_path, 'images', f'{mode}_denoising_{num_images}_{self.current_epoch}.png'))
             
             acc = self.evaluator.eval(images.to(device), label)
             acc_temp += acc
@@ -169,7 +170,7 @@ def main(args):
  
     if args.mode == 'train':
         wandb.init(project="DDPM",
-        #    mode='disabled',
+            # mode='disabled',
             config=vars(args),
             name=args.wandb_run_name,
             save_code=True)
