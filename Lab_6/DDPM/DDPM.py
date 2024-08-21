@@ -108,6 +108,10 @@ class CDDPM():
 
 
     def eval(self, mode='test'):
+        torch.manual_seed(42)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(42)
+        
         if mode == 'test':
             dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='test'), 
                                   batch_size=32, shuffle=False)
@@ -137,28 +141,43 @@ class CDDPM():
                 # 使用 make_grid 生成網格
                 image_grid = vutils.make_grid(denormalized.cpu(), nrow=8, normalize=True, padding=2)
                 # 保存圖像
-                vutils.save_image(image_grid, os.path.join(self.args.save_path, 'images', f'{mode}_{num_images}_{self.current_epoch}.png'))
-            denoising_grid = vutils.make_grid(torch.stack(denoising_process), nrow=8, normalize=True, padding=2)
-            vutils.save_image(denoising_grid, os.path.join(self.args.save_path, 'images', f'{mode}_denoising_{num_images}_{self.current_epoch}.png'))
-            
+            vutils.save_image(image_grid, os.path.join(self.args.save_path, 'images', f'{mode}_{num_images}_{self.current_epoch}.png'))
+
             acc = self.evaluator.eval(images.to(device), label)
             acc_temp += acc
             num_images += 1
 
         print(f'Accuracy: {acc_temp/len(dataload)}')
+
+        
         return acc_temp / len(dataload)
-
-
+    def denoising_process(self):
+        dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='denoising'),batch_size=1, shuffle=False)
+        denoising_process = []
+        for label in dataload:
+            images = torch.randn(1, 3, 64, 64).to(device)
+            label=label.to(device)
+            for j , t in enumerate(self.noise_scheduler.timesteps):
+                with torch.no_grad():
+                    pred = self.net(images, t, label)
+                images = self.noise_scheduler.step(pred, t, images).prev_sample
+                denormalized = (images.detach() / 2 + 0.5).clamp(0, 1)
+                if (j % (self.args.timesteps // 8) == 0 and j!=0) or j==self.args.timesteps-1:
+                    print(f"save image at {j} iter")
+                    denoising_process.append(denormalized[0].cpu())                
+            denoising_grid = vutils.make_grid(torch.stack(denoising_process), nrow=8, normalize=True, padding=2)
+            vutils.save_image(denoising_grid, os.path.join(self.args.save_path, 'images', f'denoising_{self.current_epoch}.png'))
 
 def main(args):
     if args.model == 'unet':
         net = unet.Unet()
-    elif args.model == 'resnet34_unet':
-        net = resnet34_unet.ResNet34Unet()
     net.to(device)
 
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    if args.scheduler == 'stepLR':
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    elif args.scheduler == 'cosine_annealing':
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
     loss_fn = nn.MSELoss()
     noise_scheduler = DDPMScheduler(num_train_timesteps=args.timesteps, beta_schedule="squaredcos_cap_v2")
 
@@ -169,7 +188,7 @@ def main(args):
  
     if args.mode == 'train':
         wandb.init(project="DDPM",
-        #    mode='disabled',
+           mode='disabled',
             config=vars(args),
             name=args.wandb_run_name,
             save_code=True)
@@ -180,25 +199,27 @@ def main(args):
         cddpm.load_model()
         test_acc = cddpm.eval('test')
         new_test_acc = cddpm.eval('new_test')
+        cddpm.denoising_process()
         print(f'Test Acc: {test_acc}, New Test Acc: {new_test_acc}')
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='unet', help='unet or resnet34_unet')
-    parser.add_argument('--epochs', type=int, default=100, help='number of epochs')
+    parser.add_argument('--model', type=str, default='unet', help='unet')
+    parser.add_argument('--epochs', type=int, default=200, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+    parser.add_argument('--scheduler', type=str, default='cosine_annealing', help='learning rate method')
     parser.add_argument('--step_size', type=int, default=10, help='step size')
     parser.add_argument('--gamma', type=float, default=0.1, help='gamma')
-    parser.add_argument('--dataset_path', type=str, default='/home/pp037/DLP/Lab_6/DDPM/eval/', help='dataset path')
+    parser.add_argument('--dataset_path', type=str, default='./eval/', help='dataset path')
     parser.add_argument('--partial', type=float, default=1.0, help='partial') 
     parser.add_argument('--mode', type=str, default='train', help='train or test')
-    parser.add_argument('--save_path', type=str, default='/home/pp037/DLP/Lab_6/DDPM/', help='save checkpoint path')
-    parser.add_argument('--load_ckpt', type=str, default='/home/pp037/DLP/Lab_6/DDPM/model/unet_checkpoint_last.pth', help='load checkpoint path')
+    parser.add_argument('--save_path', type=str, default='./', help='save checkpoint path')
+    parser.add_argument('--load_ckpt', type=str, default='./unet_checkpoint_last.pth', help='load checkpoint path')
     parser.add_argument('--save_per', type=int, default=5, help='save model every n epochs')
-    parser.add_argument('--test_per', type=int, default=10, help='test model every n epochs')
+    parser.add_argument('--test_per', type=int, default=5, help='test model every n epochs')
     parser.add_argument('--start_epoch', type=int, default=0, help='start epoch')
     parser.add_argument('--timesteps', type=int, default=1000, help='timesteps')
-    parser.add_argument('--wandb_run_name', type=str, default='unet3', help='wandb run name')
+    parser.add_argument('--wandb_run_name', type=str, default='unet_cycle_1_ema', help='wandb run name')
     parser.add_argument('--fast_train_epoch', type=int, default=5, help='fast train epoch')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1, help='gradient accumulation steps')
 

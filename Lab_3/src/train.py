@@ -3,6 +3,7 @@ import models.unet
 import oxford_pet
 import utils
 import models.resnet34_unet
+import models.convnext
 import matplotlib.pyplot as plt
 import numpy as np
 from torch.optim import Adam
@@ -28,6 +29,8 @@ def train(args):
         model = models.unet.UNet(channels=3,classes=3)
     elif args.model == 'resnet34_unet':
         model = models.resnet34_unet.ResNet34_UNet(channels=3,classes=3)
+    elif args.model == 'convnext':
+        model = models.convnext.ConvNeXt(in_chans=3, num_classes=3)
     else:
         raise ValueError('Model not supported')
     model.to(device)
@@ -112,12 +115,12 @@ def train(args):
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
-    parser.add_argument('--data_path', type=str, help='path of the input data',default='dataset/oxford-iiit-pet')
-    parser.add_argument('--epochs', '-e', type=int, default=40, help='number of epochs')
-    parser.add_argument('--batch_size', '-b', type=int, default=1, help='batch size')
-    parser.add_argument('--learning-rate', '-lr', type=float, default=1e-5, help='learning rate')
-    parser.add_argument('--model', '-m', type=str, default='resnet34_unet', help='model name')
-    parser.add_argument('--loss', '-l', type=str, default='dice', help='loss function')
+    parser.add_argument('--data_path', type=str, help='path of the input data',default='D:\Cloud\DLP\Lab_3\dataset\oxford-iiit-pet')
+    parser.add_argument('--epochs', '-e', type=int, default=50, help='number of epochs')
+    parser.add_argument('--batch_size', '-b', type=int, default=2, help='batch size')
+    parser.add_argument('--learning-rate', '-lr', type=float, default=8e-5, help='learning rate')
+    parser.add_argument('--model', '-m', type=str, default='convnext', help='model name')
+    parser.add_argument('--loss', '-l', type=str, default='dice', help='cross_entropy function')
     parser.add_argument('--save_model', type=str, default='D:\Cloud\DLP\Lab_3\saved_models', help='path to save model')
     return parser.parse_args()
  
