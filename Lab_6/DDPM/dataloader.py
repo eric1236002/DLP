@@ -24,8 +24,14 @@ class iclevr(Dataset):
             with open(path+'/new_test.json', 'r') as file:
                 self.json_data = json.load(file)
             self.labels = self.json_data
+        elif mode == 'denoising':
+            with open(path+'/denoising.json', 'r') as file:
+                self.json_data = json.load(file)
+            self.labels = self.json_data
+        else:
+            raise ValueError('mode should be "train" or "test" or "new_test"')
         self.labels_one_hot = []
-        with open(path+'objects.json', 'r') as file:
+        with open(path+'/objects.json', 'r') as file:
             self.objects_dict = json.load(file)
         for label in self.labels:
             label_one_hot = [0] * len(self.objects_dict)
@@ -54,4 +60,6 @@ class iclevr(Dataset):
         elif self.mode == 'test':
             return self.labels_one_hot[idx]
         elif self.mode == 'new_test':
+            return self.labels_one_hot[idx]
+        elif self.mode == 'denoising':
             return self.labels_one_hot[idx]
