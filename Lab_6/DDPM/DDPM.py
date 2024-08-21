@@ -112,6 +112,10 @@ class CDDPM():
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(42)
         
+        torch.manual_seed(42)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(42)
+
         if mode == 'test':
             dataload = DataLoader(dataloader.iclevr(path=self.args.dataset_path, mode='test'), 
                                   batch_size=32, shuffle=False)
@@ -125,7 +129,6 @@ class CDDPM():
             label = label.to(device)
             images = torch.randn(32, 3, 64, 64).to(device)
             
-            # 保存去噪過程
             denoising_process = []
             
             for j, t in tqdm(enumerate(self.noise_scheduler.timesteps)):
