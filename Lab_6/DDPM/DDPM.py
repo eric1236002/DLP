@@ -4,7 +4,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from diffusers import DDPMScheduler, UNet2DModel
 import argparse
-import dataloader, unet, resnet34_unet
+import dataloader, unet
 import os
 from tqdm import tqdm
 from eval.evaluator import evaluation_model
