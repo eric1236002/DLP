@@ -26,6 +26,7 @@ HW3/
 *.ckpt
 *.pt
 *.gif
+*.part
 demo/
 checkpoint*/
 experiment*/
