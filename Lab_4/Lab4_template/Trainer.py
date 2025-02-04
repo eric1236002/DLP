@@ -196,30 +196,28 @@ class VAE_Model(nn.Module):
         loss=torch.tensor(0.0, device=self.args.device)
         recon_loss_sum = torch.tensor(0.0, device=self.args.device)
         kl_loss_sum = torch.tensor(0.0, device=self.args.device)
-        first_img = img[:, 0]
-        for i in range(self.train_vi_len):
-            # Encoder取影片的前i-1張
-            if adapt_TeacherForcing:
-                first_img = img[:,i-1]
-            frame_feature = self.frame_transformation(first_img)
-            label_feature = self.label_transformation(label[:,i])
+        for i in range(1, self.train_vi_len):
+            frame_current,label_current,frame_pre = img[:,i], label[:,i], img[:,i-1]
+            # Encoder取影片的前i張
+            if adapt_TeacherForcing and i==1:
+                x_pre = self.frame_transformation(frame_pre)
+            else:
+                x_pre = self.frame_transformation(gen_img)
+            x_current = self.frame_transformation(frame_current)
+            p_current = self.label_transformation(label_current)
 
 
             # Gaussian predictor
-            z, mu, logvar = self.Gaussian_Predictor(frame_feature, label_feature)
-
+            z, mu, logvar = self.Gaussian_Predictor(x_current, p_current)
             # decode fusion
-            decoded = self.Decoder_Fusion(frame_feature, label_feature, z)
-            
-            generated = self.Generator(decoded)
-            first_img=generated
+            decoded = self.Decoder_Fusion(x_pre, p_current, z)
+            gen_img = self.Generator(decoded)
             #reconstruction loss
-            recon_loss = self.mse_criterion(generated, img[:,i])
+            recon_loss = self.mse_criterion(gen_img, frame_current)
             recon_loss_sum += recon_loss
             #kl divergence loss
             kl_loss = kl_criterion(mu, logvar, img.size(0))
             kl_loss_sum += kl_loss
-            
 
             beta = self.kl_annealing.get_beta()
             loss += recon_loss + beta * kl_loss
@@ -238,10 +236,11 @@ class VAE_Model(nn.Module):
         pre_img = img[:, 0]
         image_list = [pre_img]
         loss=torch.tensor(0.0, device=self.args.device)
-        for i in range(self.val_vi_len):
+        for i in range(1,self.val_vi_len):
+            pose_current, frame_current=label[:,i], img[:,i]
             # Encoder
             frame_feature = self.frame_transformation(pre_img)
-            label_feature = self.label_transformation(label[:,i])
+            label_feature = self.label_transformation(pose_current)
 
             # Gaussian predictor
             z= torch.randn(1, self.args.N_dim, self.args.frame_H, self.args.frame_W).to(self.args.device)
@@ -253,7 +252,7 @@ class VAE_Model(nn.Module):
             pre_img=generated
             image_list.append(generated)
             #reconstruction loss
-            recon_loss = self.mse_criterion(generated, img[:,i])
+            recon_loss = self.mse_criterion(generated, frame_current)
 
             loss += recon_loss 
         psnr_list, avg_psnr = Caluate_PSNR(img[0], image_list)
